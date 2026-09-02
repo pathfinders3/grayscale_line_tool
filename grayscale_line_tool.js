@@ -268,6 +268,16 @@ function getSampleIndexFromCanvasX(canvasX, sampleCount) {
   return Math.max(0, Math.min(sampleCount - 1, Math.round(indexRatio * (sampleCount - 1))));
 }
 
+function getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, xMin, xMax) {
+  if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || sampleCount <= 0) return null;
+  const start = Number.isFinite(xMin) ? xMin : 0;
+  const end = Number.isFinite(xMax) ? xMax : start;
+  const span = Math.max(0, end - start);
+  const ratio = sampleCount > 1 ? sampleIndex / (sampleCount - 1) : 0;
+  const mappedX = Math.max(0, Math.min(sourceCanvas ? sourceCanvas.width - 1 : end, Math.round(start + ratio * span)));
+  return mappedX;
+}
+
 function drawGraphHoverGuide() {
   if (!hoverGuideState.active) return;
 
@@ -396,6 +406,10 @@ function updateGraphHoverInfo(evt) {
   hoverGuideState.sampleIndex = sampleIndex;
   hoverGuideState.canvasX = sampleX;
 
+  const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+    ? getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+    : null;
+
   const parts = [];
   for (const line of lines) {
     if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
@@ -405,7 +419,7 @@ function updateGraphHoverInfo(evt) {
 
   const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}`);
+  setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}`);
 }
 
 function updatePeakPanelsFromCurrentGraphState() {
@@ -1020,7 +1034,9 @@ graphCanvas.addEventListener('click', (event) => {
   if (sampleCount <= 0) return;
 
   const sampleIndex = getSampleIndexFromCanvasX(clickX, sampleCount);
-  const mappedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1))));
+  const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+    ? getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+    : Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1))));
   showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
 });
 
