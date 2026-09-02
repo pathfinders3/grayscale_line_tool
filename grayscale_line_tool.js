@@ -43,6 +43,8 @@ let hoverGuideState = {
   sampleIndex: -1,
   canvasX: 0
 };
+let originalGuideLineY = null;
+let originalGuideLineTimer = null;
 
 function parseNonNegativeInt(value, fallback) {
   const n = Number.parseInt(value, 10);
@@ -323,6 +325,22 @@ function setOriginalHoverInfo(text) {
   originalHoverInfoEl.textContent = text;
 }
 
+function showTemporaryOriginalGuideLine(y, durationMs = 15000) {
+  if (!hasImage || !sourceCanvas) return;
+  const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
+  originalGuideLineY = clampedY;
+  if (originalGuideLineTimer) {
+    clearTimeout(originalGuideLineTimer);
+    originalGuideLineTimer = null;
+  }
+  redrawOriginalCanvas();
+  originalGuideLineTimer = setTimeout(() => {
+    originalGuideLineY = null;
+    originalGuideLineTimer = null;
+    redrawOriginalCanvas();
+  }, durationMs);
+}
+
 function updateGraphHoverInfo(evt) {
   if (!evt) return;
   const lines = getActiveLinesFromGraphState();
@@ -447,6 +465,11 @@ function loadImageIntoCanvases(bitmap) {
   originalCanvas.width = bitmap.width;
   originalCanvas.height = bitmap.height;
   hasImage = true;
+  if (originalGuideLineTimer) {
+    clearTimeout(originalGuideLineTimer);
+    originalGuideLineTimer = null;
+  }
+  originalGuideLineY = null;
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   yInput.value = midY;
@@ -480,6 +503,24 @@ function redrawOriginalCanvas() {
     const h = selection.yBottom - selection.yTop;
     originalCtx.fillRect(selection.xMin, selection.yTop, w, h);
     originalCtx.strokeRect(selection.xMin, selection.yTop, w, h);
+    originalCtx.restore();
+  }
+
+  if (typeof originalGuideLineY === 'number') {
+    originalCtx.save();
+    originalCtx.strokeStyle = 'rgba(0, 199, 0, 0.95)';
+    originalCtx.lineWidth = 1.5;
+    originalCtx.setLineDash([7, 5]);
+    originalCtx.beginPath();
+    originalCtx.moveTo(0, originalGuideLineY + 0.5);
+    originalCtx.lineTo(originalCanvas.width, originalGuideLineY + 0.5);
+    originalCtx.stroke();
+    originalCtx.setLineDash([]);
+    originalCtx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+    originalCtx.fillRect(4, Math.max(2, originalGuideLineY - 15), 42, 13);
+    originalCtx.fillStyle = '#7ef3ff';
+    originalCtx.font = '11px sans-serif';
+    originalCtx.fillText(`y=${originalGuideLineY}`, 8, Math.max(12, originalGuideLineY - 5));
     originalCtx.restore();
   }
 }
@@ -703,6 +744,9 @@ function renderCumulateSelector(snapshot) {
     if (!allInput.checked) return;
     selectedCumulateLine = 'all';
     drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+    if (Array.isArray(currentSnapshot.lines) && currentSnapshot.lines.length > 0) {
+      showTemporaryOriginalGuideLine(currentSnapshot.lines[0].y, 15000);
+    }
     updatePeakPanelsFromCurrentGraphState();
     setStatus(`cumulate 표시: 전체 라인 (${currentSnapshot.lines.length}개)`);
   });
@@ -721,12 +765,13 @@ function renderCumulateSelector(snapshot) {
       if (!input.checked) return;
       selectedCumulateLine = String(index);
       drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+      showTemporaryOriginalGuideLine(line.y, 15000);
       updatePeakPanelsFromCurrentGraphState();
       setStatus(`cumulate 표시: line ${index + 1} (${line.label || `y=${line.y}`})`);
     });
 
     label.appendChild(input);
-    label.appendChild(document.createTextNode(`line ${index + 1}`));
+    label.appendChild(document.createTextNode(`line ${index + 1} (y=${line.y})`));
     container.appendChild(label);
   });
 
@@ -860,6 +905,7 @@ document.getElementById('btnGrayscale').addEventListener('click', () => {
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
     selectedCumulateLine = 'all';
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    showTemporaryOriginalGuideLine(fixedY, 15000);
     updatePeakPanelsFromCurrentGraphState();
     setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], 64개 샘플`);
     console.log('grayscale snapshot', currentSnapshot);
@@ -889,6 +935,7 @@ document.getElementById('btnCumulate').addEventListener('click', () => {
     selectedCumulateLine = 'all';
     renderCumulateSelector(currentSnapshot);
     drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+    showTemporaryOriginalGuideLine(lines[0].y, 15000);
     updatePeakPanelsFromCurrentGraphState();
     setStatus(`cumulate 완료: baseY=${baseY}, 라인 ${lines.length}개, X[${xMin}, ${xMax}]`);
     console.log('cumulate snapshot', currentSnapshot);
