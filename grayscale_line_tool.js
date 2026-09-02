@@ -9,6 +9,7 @@ const lineCountInput = document.getElementById('lineCountInput');
 const statusEl = document.getElementById('status');
 const peakValuesPanelEl = document.getElementById('peakValuesPanel');
 const peakSidesPanelEl = document.getElementById('peakSidesPanel');
+const originalHoverInfoEl = document.getElementById('originalHoverInfo');
 const graphHoverInfoEl = document.getElementById('graphHoverInfo');
 const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
@@ -317,6 +318,11 @@ function setGraphHoverInfo(text) {
   graphHoverInfoEl.textContent = text;
 }
 
+function setOriginalHoverInfo(text) {
+  if (!originalHoverInfoEl) return;
+  originalHoverInfoEl.textContent = text;
+}
+
 function updateGraphHoverInfo(evt) {
   if (!evt) return;
   const lines = getActiveLinesFromGraphState();
@@ -546,13 +552,19 @@ originalCanvas.addEventListener('mousedown', (e) => {
 });
 
 originalCanvas.addEventListener('mousemove', (e) => {
-  if (!isDragging || !hasImage) return;
   const { x, y } = getCanvasCoords(e);
+  setOriginalHoverInfo(`original cursor: x=${x}, y=${y}`);
+
+  if (!isDragging || !hasImage) return;
   selection.xMin = Math.max(0, Math.min(dragStartX, x));
   selection.xMax = Math.min(originalCanvas.width - 1, Math.max(dragStartX, x));
   selection.yTop = Math.max(0, Math.min(dragStartY, y));
   selection.yBottom = Math.min(originalCanvas.height - 1, Math.max(dragStartY, y));
   redrawOriginalCanvas();
+});
+
+originalCanvas.addEventListener('mouseleave', () => {
+  setOriginalHoverInfo('original cursor: x=-, y=-');
 });
 
 window.addEventListener('mouseup', () => {
@@ -937,4 +949,5 @@ if (reboundDeltaInput) {
 }
 
 updatePeakPanelsFromCurrentGraphState();
+setOriginalHoverInfo('original cursor: x=-, y=-');
 setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
