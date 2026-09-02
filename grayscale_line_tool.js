@@ -50,6 +50,22 @@ document.addEventListener('paste', async (e) => {
   }
 });
 
+function createDefaultSelection(width, height) {
+  const xPad = Math.max(8, Math.round(width * 0.1));
+  const yPad = Math.max(8, Math.round(height * 0.15));
+  const xMin = Math.min(width - 1, Math.max(0, xPad));
+  const xMax = Math.max(xMin + 1, width - xPad - 1);
+  const yTop = Math.min(height - 1, Math.max(0, yPad));
+  const yBottom = Math.max(yTop + 1, height - yPad - 1);
+
+  return {
+    xMin,
+    xMax,
+    yTop,
+    yBottom
+  };
+}
+
 function loadImageIntoCanvases(bitmap) {
   // Rebuild the pure source canvas at native image resolution.
   sourceCanvas = document.createElement('canvas');
@@ -61,9 +77,19 @@ function loadImageIntoCanvases(bitmap) {
   originalCanvas.width = bitmap.width;
   originalCanvas.height = bitmap.height;
   hasImage = true;
-  selection = null;
+  selection = createDefaultSelection(bitmap.width, bitmap.height);
+  const midY = Math.round((selection.yTop + selection.yBottom) / 2);
+  yInput.value = midY;
   redrawOriginalCanvas();
-  setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 드래그로 영역을 선택할 수 있습니다.`);
+
+  try {
+    const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
+    currentSnapshot = buildGrayscaleSnapshot(midY, selection.xMin, selection.xMax, values);
+    drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역이 자동 적용되었습니다. 드래그로 직접 영역을 바꿀 수 있습니다.`);
+  } catch (err) {
+    setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역을 적용했지만 그래프 생성 중 오류가 발생했습니다: ${err.message}`, true);
+  }
 }
 
 // Redraws the visible canvas from the pure source + a selection overlay.
