@@ -112,6 +112,48 @@ function redrawOriginalCanvas() {
   }
 }
 
+function moveSelectionBy(dx, dy) {
+  if (!hasImage || !selection) return;
+  const width = Math.max(1, selection.xMax - selection.xMin);
+  const height = Math.max(1, selection.yBottom - selection.yTop);
+
+  const maxX = Math.max(0, originalCanvas.width - width);
+  const maxY = Math.max(0, originalCanvas.height - height);
+
+  selection.xMin = Math.max(0, Math.min(maxX, selection.xMin + dx));
+  selection.xMax = selection.xMin + width;
+  selection.yTop = Math.max(0, Math.min(maxY, selection.yTop + dy));
+  selection.yBottom = selection.yTop + height;
+
+  const midY = Math.round((selection.yTop + selection.yBottom) / 2);
+  yInput.value = midY;
+  redrawOriginalCanvas();
+
+  if (currentSnapshot && currentSnapshot.type === 'grayscale-line') {
+    const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
+    currentSnapshot = buildGrayscaleSnapshot(midY, selection.xMin, selection.xMax, values);
+    drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+  } else if (currentSnapshot && currentSnapshot.type === 'cumulate-lines') {
+    const baseY = midY;
+    const lineCount = currentSnapshot.lineCount;
+    const xMin = selection.xMin;
+    const xMax = selection.xMax;
+    const lines = [];
+    for (let i = 0; i < lineCount; i++) {
+      const y = baseY - i;
+      if (y < 0) break;
+      const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, y, sourceCanvas.width, sourceCanvas.height);
+      lines.push({ y, label: `y=${y}`, color: colorForIndex(i, lineCount), values });
+    }
+    if (lines.length > 0) {
+      currentSnapshot = buildCumulateSnapshot(baseY, lines.length, xMin, xMax, lines);
+      drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot);
+    }
+  }
+
+  setStatus(`선택 영역 이동: X[${selection.xMin}, ${selection.xMax}], Y 중앙=${midY}`);
+}
+
 // Converts a mouse event to native canvas-pixel coordinates, accounting
 // for any CSS scaling of the displayed canvas.
 function getCanvasCoords(evt) {
@@ -152,6 +194,19 @@ window.addEventListener('mouseup', () => {
     yInput.value = midY;
     setStatus(`선택 영역: X[${selection.xMin}, ${selection.xMax}], Y 중앙=${midY}`);
   }
+});
+
+window.addEventListener('keydown', (event) => {
+  const key = event.key.toLowerCase();
+  if (['w', 'a', 's', 'd'].includes(key) === false) return;
+  if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+
+  event.preventDefault();
+  if (!hasImage || !selection) return;
+
+  const dx = key === 'd' ? 5 : key === 'a' ? -5 : 0;
+  const dy = key === 's' ? 5 : key === 'w' ? -5 : 0;
+  moveSelectionBy(dx, dy);
 });
 
 // ---------- Sampling ----------
