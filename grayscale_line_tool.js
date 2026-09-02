@@ -9,6 +9,10 @@ const lineCountInput = document.getElementById('lineCountInput');
 const statusEl = document.getElementById('status');
 const peakValuesPanelEl = document.getElementById('peakValuesPanel');
 const peakSidesPanelEl = document.getElementById('peakSidesPanel');
+const peakModeSelect = document.getElementById('peakModeSelect');
+const plateauToleranceInput = document.getElementById('plateauToleranceInput');
+const reboundModeSelect = document.getElementById('reboundModeSelect');
+const reboundDeltaInput = document.getElementById('reboundDeltaInput');
 
 // ---------- State ----------
 // sourceCanvas holds the PURE, untouched pixel data of the pasted image.
@@ -26,6 +30,49 @@ let dragStartX = 0, dragStartY = 0;
 // Last snapshot kept in memory (also logged to console).
 let currentSnapshot = null;
 let selectedCumulateLine = 'all';
+let analysisOptions = {
+  peakMode: 'strict',
+  plateauTolerance: 0,
+  reboundMode: 'first-rise',
+  reboundDelta: 1
+};
+
+function parseNonNegativeInt(value, fallback) {
+  const n = Number.parseInt(value, 10);
+  if (Number.isNaN(n) || n < 0) return fallback;
+  return n;
+}
+
+function parsePositiveInt(value, fallback) {
+  const n = Number.parseInt(value, 10);
+  if (Number.isNaN(n) || n < 1) return fallback;
+  return n;
+}
+
+function getAnalysisOptionsFromInputs() {
+  const peakMode = peakModeSelect && (peakModeSelect.value === 'plateau' || peakModeSelect.value === 'strict')
+    ? peakModeSelect.value
+    : 'strict';
+  const reboundMode = reboundModeSelect && (reboundModeSelect.value === 'delta-rise' || reboundModeSelect.value === 'first-rise')
+    ? reboundModeSelect.value
+    : 'first-rise';
+  const plateauTolerance = plateauToleranceInput ? parseNonNegativeInt(plateauToleranceInput.value, 0) : 0;
+  const reboundDelta = reboundDeltaInput ? parsePositiveInt(reboundDeltaInput.value, 1) : 1;
+
+  return {
+    peakMode,
+    plateauTolerance,
+    reboundMode,
+    reboundDelta
+  };
+}
+
+function syncAnalysisOptionsFromInputs() {
+  analysisOptions = getAnalysisOptionsFromInputs();
+  if (reboundDeltaInput) {
+    reboundDeltaInput.disabled = analysisOptions.reboundMode !== 'delta-rise';
+  }
+}
 
 function setPanelText(el, text) {
   if (!el) return;
@@ -47,20 +94,51 @@ function togglePeakPanel(panelId, buttonId) {
 
 function findPeaks(values, options = {}) {
   if (!Array.isArray(values) || values.length < 3) return [];
-  const peaks = [];
-  for (let i = 1; i < values.length - 1; i++) {
-    const left = values[i - 1];
-    const current = values[i];
-    const right = values[i + 1];
-    if (current > left && current > right) {
-      peaks.push(i);
+
+  const peakMode = options.peakMode === 'plateau' ? 'plateau' : 'strict';
+  const tolerance = parseNonNegativeInt(options.plateauTolerance, 0);
+
+  if (peakMode === 'strict') {
+    const peaks = [];
+    for (let i = 1; i < values.length - 1; i++) {
+      const left = values[i - 1];
+      const current = values[i];
+      const right = values[i + 1];
+      if (current - left > tolerance && current - right > tolerance) {
+        peaks.push(i);
+      }
     }
+    return peaks;
   }
+
+  const peaks = [];
+  let i = 1;
+  while (i < values.length - 1) {
+    const start = i;
+    let end = i;
+    while (end + 1 < values.length && Math.abs(values[end + 1] - values[start]) <= tolerance) {
+      end += 1;
+    }
+
+    if (start > 0 && end < values.length - 1) {
+      const top = values[start];
+      const left = values[start - 1];
+      const right = values[end + 1];
+      if (top - left > tolerance && top - right > tolerance) {
+        peaks.push(Math.floor((start + end) / 2));
+      }
+    }
+    i = end + 1;
+  }
+
   return peaks;
 }
 
 function analyzePeakSides(values, peakIndices, options = {}) {
   if (!Array.isArray(values) || !Array.isArray(peakIndices) || peakIndices.length === 0) return [];
+
+  const reboundMode = options.reboundMode === 'delta-rise' ? 'delta-rise' : 'first-rise';
+  const reboundDelta = parsePositiveInt(options.reboundDelta, 1);
 
   const results = [];
   for (const peakIndex of peakIndices) {
@@ -68,7 +146,9 @@ function analyzePeakSides(values, peakIndices, options = {}) {
 
     let leftReboundIndex = -1;
     for (let i = peakIndex - 1; i >= 1; i--) {
-      if (values[i - 1] > values[i]) {
+      const rises = values[i - 1] > values[i];
+      const risesByDelta = values[i - 1] >= values[i] + reboundDelta;
+      if ((reboundMode === 'first-rise' && rises) || (reboundMode === 'delta-rise' && risesByDelta)) {
         leftReboundIndex = i;
         break;
       }
@@ -76,7 +156,9 @@ function analyzePeakSides(values, peakIndices, options = {}) {
 
     let rightReboundIndex = -1;
     for (let i = peakIndex + 1; i <= values.length - 2; i++) {
-      if (values[i + 1] > values[i]) {
+      const rises = values[i + 1] > values[i];
+      const risesByDelta = values[i + 1] >= values[i] + reboundDelta;
+      if ((reboundMode === 'first-rise' && rises) || (reboundMode === 'delta-rise' && risesByDelta)) {
         rightReboundIndex = i;
         break;
       }
@@ -99,6 +181,7 @@ function formatPeakValuesForDisplay(lines) {
   if (!Array.isArray(lines) || lines.length === 0) return '데이터 없음';
 
   const rows = [];
+  rows.push(`mode=${analysisOptions.peakMode}, tolerance=${analysisOptions.plateauTolerance}`);
   for (const line of lines) {
     const values = Array.isArray(line.peakValues) ? line.peakValues : [];
     const label = line.label || 'L?';
@@ -112,6 +195,7 @@ function formatPeakSidesForDisplay(lines) {
   if (!Array.isArray(lines) || lines.length === 0) return '데이터 없음';
 
   const out = [];
+  out.push(`mode=${analysisOptions.reboundMode}, delta=${analysisOptions.reboundDelta}`);
   for (const line of lines) {
     out.push(`${line.label || 'L?'}`);
     const sides = Array.isArray(line.sides) ? line.sides : [];
@@ -157,6 +241,7 @@ function getActiveLinesFromGraphState() {
 }
 
 function updatePeakPanelsFromCurrentGraphState() {
+  syncAnalysisOptionsFromInputs();
   const lines = getActiveLinesFromGraphState();
   if (!lines || lines.length === 0) {
     setPanelText(peakValuesPanelEl, '데이터 없음');
@@ -166,8 +251,8 @@ function updatePeakPanelsFromCurrentGraphState() {
 
   const analyzed = lines.map((line) => {
     const values = Array.isArray(line.values) ? line.values : [];
-    const peakIndices = findPeaks(values, {});
-    const sides = analyzePeakSides(values, peakIndices, {});
+    const peakIndices = findPeaks(values, analysisOptions);
+    const sides = analyzePeakSides(values, peakIndices, analysisOptions);
     return {
       label: line.label,
       peakIndices,
@@ -693,5 +778,29 @@ document.getElementById('peakValuesToggle').addEventListener('click', () => {
 document.getElementById('peakSidesToggle').addEventListener('click', () => {
   togglePeakPanel('peakSidesPanel', 'peakSidesToggle');
 });
+
+if (peakModeSelect) {
+  peakModeSelect.addEventListener('change', () => {
+    updatePeakPanelsFromCurrentGraphState();
+  });
+}
+
+if (plateauToleranceInput) {
+  plateauToleranceInput.addEventListener('change', () => {
+    updatePeakPanelsFromCurrentGraphState();
+  });
+}
+
+if (reboundModeSelect) {
+  reboundModeSelect.addEventListener('change', () => {
+    updatePeakPanelsFromCurrentGraphState();
+  });
+}
+
+if (reboundDeltaInput) {
+  reboundDeltaInput.addEventListener('change', () => {
+    updatePeakPanelsFromCurrentGraphState();
+  });
+}
 
 updatePeakPanelsFromCurrentGraphState();

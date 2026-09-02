@@ -11,6 +11,13 @@
   .canvas-box { border:1px solid #555; background:#111; }
   .canvas-box p { margin:0; padding:4px 8px; font-size:11px; color:#888; border-bottom:1px solid #333; }
   .analysis-box { width:320px; min-height:320px; border:1px solid #555; background:#111; padding:8px; }
+  .analysis-options { margin-bottom:8px; padding:8px; border:1px solid #3b3b3b; border-radius:5px; background:#181818; }
+  .analysis-options h3 { margin:0 0 6px; font-size:12px; font-weight:600; color:#bfbfbf; }
+  .analysis-options .row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  .analysis-options .row:last-child { margin-bottom:0; }
+  .analysis-options .row span { font-size:12px; color:#cdcdcd; }
+  .analysis-options select,
+  .analysis-options input[type=number] { width:146px; padding:2px 4px; font-size:12px; border:1px solid #4a4a4a; border-radius:4px; background:#252525; color:#eee; }
   .peak-panel { margin-bottom:8px; border:1px solid #3b3b3b; border-radius:5px; overflow:hidden; }
   .peak-toggle { width:100%; text-align:left; padding:7px 9px; border:0; border-bottom:1px solid #2e2e2e; background:#1c1c1c; color:#eee; cursor:pointer; border-radius:0; }
   .peak-toggle:hover { background:#2a2a2a; }
@@ -42,6 +49,31 @@
     <canvas id="graphCanvas" width="480" height="320"></canvas>
   </div>
   <div class="analysis-box">
+    <div class="analysis-options">
+      <h3>Peak Analysis Options</h3>
+      <div class="row">
+        <span>Peak mode</span>
+        <select id="peakModeSelect">
+          <option value="strict">strict (좌/우보다 큼)</option>
+          <option value="plateau">plateau center</option>
+        </select>
+      </div>
+      <div class="row">
+        <span>Plateau tolerance</span>
+        <input type="number" id="plateauToleranceInput" min="0" step="1" value="0">
+      </div>
+      <div class="row">
+        <span>Rebound mode</span>
+        <select id="reboundModeSelect">
+          <option value="first-rise">first rise</option>
+          <option value="delta-rise">delta rise</option>
+        </select>
+      </div>
+      <div class="row">
+        <span>Rebound delta</span>
+        <input type="number" id="reboundDeltaInput" min="1" step="1" value="1">
+      </div>
+    </div>
     <div class="peak-panel">
       <button id="peakValuesToggle" class="peak-toggle" type="button" data-title="Peak Y values">Peak Y values ▼</button>
       <div id="peakValuesPanel" class="peak-content">데이터 없음</div>
