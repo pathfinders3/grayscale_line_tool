@@ -9,6 +9,7 @@ const lineCountInput = document.getElementById('lineCountInput');
 const statusEl = document.getElementById('status');
 const peakValuesPanelEl = document.getElementById('peakValuesPanel');
 const peakSidesPanelEl = document.getElementById('peakSidesPanel');
+const graphHoverInfoEl = document.getElementById('graphHoverInfo');
 const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
 const reboundModeSelect = document.getElementById('reboundModeSelect');
@@ -238,6 +239,56 @@ function getActiveLinesFromGraphState() {
   }
 
   return [];
+}
+
+function getGraphCanvasCoords(evt) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const scaleX = graphCanvas.width / rect.width;
+  const scaleY = graphCanvas.height / rect.height;
+  return {
+    x: Math.max(0, Math.min(graphCanvas.width - 1, Math.round((evt.clientX - rect.left) * scaleX))),
+    y: Math.max(0, Math.min(graphCanvas.height - 1, Math.round((evt.clientY - rect.top) * scaleY)))
+  };
+}
+
+function setGraphHoverInfo(text) {
+  if (!graphHoverInfoEl) return;
+  graphHoverInfoEl.textContent = text;
+}
+
+function updateGraphHoverInfo(evt) {
+  if (!evt) return;
+  const lines = getActiveLinesFromGraphState();
+  if (!lines || lines.length === 0) {
+    setGraphHoverInfo('graph cursor: x=-, y=-, color=데이터 없음');
+    return;
+  }
+
+  const coords = getGraphCanvasCoords(evt);
+  const left = 30;
+  const right = graphCanvas.width - 10;
+  if (coords.x < left || coords.x > right) {
+    setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, color=-`);
+    return;
+  }
+
+  const indexRatio = (coords.x - left) / Math.max(1, right - left);
+  const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
+  if (sampleCount <= 0) {
+    setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, color=데이터 없음`);
+    return;
+  }
+
+  const sampleIndex = Math.max(0, Math.min(sampleCount - 1, Math.round(indexRatio * (sampleCount - 1))));
+  const parts = [];
+  for (const line of lines) {
+    if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
+    const v = line.values[sampleIndex];
+    parts.push(`${line.label}:${v}`);
+  }
+
+  const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
+  setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}`);
 }
 
 function updatePeakPanelsFromCurrentGraphState() {
@@ -779,6 +830,14 @@ document.getElementById('peakSidesToggle').addEventListener('click', () => {
   togglePeakPanel('peakSidesPanel', 'peakSidesToggle');
 });
 
+graphCanvas.addEventListener('mousemove', (event) => {
+  updateGraphHoverInfo(event);
+});
+
+graphCanvas.addEventListener('mouseleave', () => {
+  setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
+});
+
 if (peakModeSelect) {
   peakModeSelect.addEventListener('change', () => {
     updatePeakPanelsFromCurrentGraphState();
@@ -804,3 +863,4 @@ if (reboundDeltaInput) {
 }
 
 updatePeakPanelsFromCurrentGraphState();
+setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
