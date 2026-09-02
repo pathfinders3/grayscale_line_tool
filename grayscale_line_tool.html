@@ -17,6 +17,8 @@
   input[type=number]{ width:80px; padding:3px; }
   button { padding:6px 14px; cursor:pointer; border:1px solid #555; background:#2a2a2a; color:#eee; border-radius:4px; }
   button:hover { background:#3a3a3a; }
+  .cumulate-options { display:none; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 12px; padding:6px 10px; border:1px solid #444; background:#1a1a1a; border-radius:6px; }
+  .cumulate-options label { display:inline-flex; align-items:center; gap:5px; padding:2px 6px; border-radius:4px; }
   #status { font-size:13px; color:#9fdf9f; min-height:20px; white-space:pre-wrap; }
   #status.error { color:#ff8080; }
 </style>
@@ -43,6 +45,8 @@
   <button id="btnCumulate">to cumulate</button>
   <button id="btnPasteJson">Paste Gray JSON</button>
 </div>
+
+<div id="cumulateOptions" class="cumulate-options" aria-label="cumulate line selector"></div>
 
 <div id="status">이미지를 붙여넣어 주세요 (Ctrl+V)</div>
 

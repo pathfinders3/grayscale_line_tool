@@ -23,6 +23,7 @@ let dragStartX = 0, dragStartY = 0;
 
 // Last snapshot kept in memory (also logged to console).
 let currentSnapshot = null;
+let selectedCumulateLine = 'all';
 
 // ---------- Status helper ----------
 function setStatus(msg, isError) {
@@ -147,7 +148,8 @@ function moveSelectionBy(dx, dy) {
     }
     if (lines.length > 0) {
       currentSnapshot = buildCumulateSnapshot(baseY, lines.length, xMin, xMax, lines);
-      drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot);
+      renderCumulateSelector(currentSnapshot);
+      drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
     }
   }
 
@@ -295,9 +297,63 @@ function plotLine(ctx, canvas, values, yMin, yMax, color) {
   ctx.restore();
 }
 
+function renderCumulateSelector(snapshot) {
+  const container = document.getElementById('cumulateOptions');
+  if (!container) return;
+
+  if (!snapshot || snapshot.type !== 'cumulate-lines' || !Array.isArray(snapshot.lines) || snapshot.lines.length === 0) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = '';
+  const allLabel = document.createElement('label');
+  const allInput = document.createElement('input');
+  allInput.type = 'radio';
+  allInput.name = 'cumulateLineSelection';
+  allInput.value = 'all';
+  allInput.checked = selectedCumulateLine === 'all';
+  allInput.addEventListener('change', () => {
+    if (!allInput.checked) return;
+    selectedCumulateLine = 'all';
+    drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+    setStatus(`cumulate 표시: 전체 라인 (${currentSnapshot.lines.length}개)`);
+  });
+  allLabel.appendChild(allInput);
+  allLabel.appendChild(document.createTextNode('all'));
+  container.appendChild(allLabel);
+
+  snapshot.lines.forEach((line, index) => {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'cumulateLineSelection';
+    input.value = String(index);
+    input.checked = String(selectedCumulateLine) === String(index);
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      selectedCumulateLine = String(index);
+      drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+      setStatus(`cumulate 표시: line ${index + 1} (${line.label || `y=${line.y}`})`);
+    });
+
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(`line ${index + 1}`));
+    container.appendChild(label);
+  });
+
+  container.style.display = 'flex';
+}
+
 function drawSingleGrayscaleGraph(canvas, snapshot) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const selector = document.getElementById('cumulateOptions');
+  if (selector) {
+    selector.style.display = 'none';
+    selector.innerHTML = '';
+  }
   if (!snapshot || !Array.isArray(snapshot.values) || snapshot.values.length === 0) {
     setStatus('그릴 데이터가 없습니다.', true);
     return;
@@ -306,7 +362,7 @@ function drawSingleGrayscaleGraph(canvas, snapshot) {
   plotLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#4da6ff');
 }
 
-function drawCumulatedGrayscaleGraph(canvas, snapshot) {
+function drawCumulatedGrayscaleGraph(canvas, snapshot, selectedLine = selectedCumulateLine) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!snapshot || !Array.isArray(snapshot.lines) || snapshot.lines.length === 0) {
@@ -314,7 +370,16 @@ function drawCumulatedGrayscaleGraph(canvas, snapshot) {
     return;
   }
   drawAxes(ctx, canvas);
-  for (const line of snapshot.lines) {
+
+  const targetIndex = selectedLine === 'all' ? null : Number(selectedLine);
+  const linesToDraw = snapshot.lines.filter((line, index) => targetIndex === null || index === targetIndex);
+
+  if (linesToDraw.length === 0) {
+    setStatus('선택된 누적 라인이 없습니다.', true);
+    return;
+  }
+
+  for (const line of linesToDraw) {
     if (Array.isArray(line.values) && line.values.length > 0) {
       plotLine(ctx, canvas, line.values, snapshot.yMin, snapshot.yMax, line.color || '#4da6ff');
     }
@@ -384,7 +449,9 @@ function restoreGraphFromJson(jsonText) {
       capturedAt: parsed.capturedAt
     };
     currentSnapshot = snapshot;
-    drawCumulatedGrayscaleGraph(graphCanvas, snapshot);
+    selectedCumulateLine = 'all';
+    renderCumulateSelector(snapshot);
+    drawCumulatedGrayscaleGraph(graphCanvas, snapshot, selectedCumulateLine);
     setStatus(`cumulate-lines 복원 완료 (라인 ${snapshot.lines.length}개)`);
   } else {
     setStatus(`알 수 없는 type 값입니다: ${parsed.type}`, true);
@@ -401,6 +468,7 @@ document.getElementById('btnGrayscale').addEventListener('click', () => {
     const xMax = selection ? selection.xMax : sourceCanvas.width - 1;
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, fixedY, sourceCanvas.width, sourceCanvas.height);
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
+    selectedCumulateLine = 'all';
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
     setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], 64개 샘플`);
     console.log('grayscale snapshot', currentSnapshot);
@@ -427,7 +495,9 @@ document.getElementById('btnCumulate').addEventListener('click', () => {
     }
     if (lines.length === 0) { setStatus('읽을 수 있는 라인이 없습니다 (Y 값을 확인하세요).', true); return; }
     currentSnapshot = buildCumulateSnapshot(baseY, lines.length, xMin, xMax, lines);
-    drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot);
+    selectedCumulateLine = 'all';
+    renderCumulateSelector(currentSnapshot);
+    drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
     setStatus(`cumulate 완료: baseY=${baseY}, 라인 ${lines.length}개, X[${xMin}, ${xMax}]`);
     console.log('cumulate snapshot', currentSnapshot);
   } catch (err) {
