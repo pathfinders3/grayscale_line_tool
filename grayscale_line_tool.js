@@ -44,6 +44,7 @@ let hoverGuideState = {
   canvasX: 0
 };
 let originalGuideLineY = null;
+let originalGuideLineX = null;
 let originalGuideLineTimer = null;
 
 function parseNonNegativeInt(value, fallback) {
@@ -329,12 +330,32 @@ function showTemporaryOriginalGuideLine(y, durationMs = 15000) {
   if (!hasImage || !sourceCanvas) return;
   const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
   originalGuideLineY = clampedY;
+  originalGuideLineX = null;
   if (originalGuideLineTimer) {
     clearTimeout(originalGuideLineTimer);
     originalGuideLineTimer = null;
   }
   redrawOriginalCanvas();
   originalGuideLineTimer = setTimeout(() => {
+    originalGuideLineY = null;
+    originalGuideLineX = null;
+    originalGuideLineTimer = null;
+    redrawOriginalCanvas();
+  }, durationMs);
+}
+
+function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
+  if (!hasImage || !sourceCanvas) return;
+  const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
+  originalGuideLineX = clampedX;
+  originalGuideLineY = null;
+  if (originalGuideLineTimer) {
+    clearTimeout(originalGuideLineTimer);
+    originalGuideLineTimer = null;
+  }
+  redrawOriginalCanvas();
+  originalGuideLineTimer = setTimeout(() => {
+    originalGuideLineX = null;
     originalGuideLineY = null;
     originalGuideLineTimer = null;
     redrawOriginalCanvas();
@@ -470,6 +491,7 @@ function loadImageIntoCanvases(bitmap) {
     originalGuideLineTimer = null;
   }
   originalGuideLineY = null;
+  originalGuideLineX = null;
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   yInput.value = midY;
@@ -521,6 +543,24 @@ function redrawOriginalCanvas() {
     originalCtx.fillStyle = '#7ef3ff';
     originalCtx.font = '11px sans-serif';
     originalCtx.fillText(`y=${originalGuideLineY}`, 8, Math.max(12, originalGuideLineY - 5));
+    originalCtx.restore();
+  }
+
+  if (typeof originalGuideLineX === 'number') {
+    originalCtx.save();
+    originalCtx.strokeStyle = 'rgba(0, 180, 255, 0.95)';
+    originalCtx.lineWidth = 1.5;
+    originalCtx.setLineDash([7, 5]);
+    originalCtx.beginPath();
+    originalCtx.moveTo(originalGuideLineX + 0.5, 0);
+    originalCtx.lineTo(originalGuideLineX + 0.5, originalCanvas.height);
+    originalCtx.stroke();
+    originalCtx.setLineDash([]);
+    originalCtx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+    originalCtx.fillRect(Math.max(4, originalGuideLineX - 20), 4, 46, 13);
+    originalCtx.fillStyle = '#7ef3ff';
+    originalCtx.font = '11px sans-serif';
+    originalCtx.fillText(`x=${originalGuideLineX}`, Math.max(8, originalGuideLineX - 16), 15);
     originalCtx.restore();
   }
 }
@@ -963,6 +1003,25 @@ document.getElementById('peakSidesToggle').addEventListener('click', () => {
 
 graphCanvas.addEventListener('mousemove', (event) => {
   updateGraphHoverInfo(event);
+});
+
+graphCanvas.addEventListener('click', (event) => {
+  if (!hasImage || !sourceCanvas) return;
+  const rect = graphCanvas.getBoundingClientRect();
+  const scaleX = graphCanvas.width / rect.width;
+  const clickX = Math.max(0, Math.min(graphCanvas.width - 1, Math.round((event.clientX - rect.left) * scaleX)));
+
+  const left = 30;
+  const right = graphCanvas.width - 10;
+  if (clickX < left || clickX > right) return;
+
+  const activeLines = getActiveLinesFromGraphState();
+  const sampleCount = activeLines && activeLines[0] && Array.isArray(activeLines[0].values) ? activeLines[0].values.length : 0;
+  if (sampleCount <= 0) return;
+
+  const sampleIndex = getSampleIndexFromCanvasX(clickX, sampleCount);
+  const mappedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1))));
+  showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
 });
 
 graphCanvas.addEventListener('mouseleave', () => {
