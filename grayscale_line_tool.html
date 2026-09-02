@@ -7,9 +7,14 @@
   body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 20px; background:#1e1e1e; color:#eee; }
   h1 { font-size: 18px; margin-bottom: 6px; }
   .hint { font-size:12px; color:#999; margin-top:0; }
-  .canvases { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:16px; }
+  .canvases { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-start; }
   .canvas-box { border:1px solid #555; background:#111; }
   .canvas-box p { margin:0; padding:4px 8px; font-size:11px; color:#888; border-bottom:1px solid #333; }
+  .analysis-box { width:320px; min-height:320px; border:1px solid #555; background:#111; padding:8px; }
+  .peak-panel { margin-bottom:8px; border:1px solid #3b3b3b; border-radius:5px; overflow:hidden; }
+  .peak-toggle { width:100%; text-align:left; padding:7px 9px; border:0; border-bottom:1px solid #2e2e2e; background:#1c1c1c; color:#eee; cursor:pointer; border-radius:0; }
+  .peak-toggle:hover { background:#2a2a2a; }
+  .peak-content { display:none; padding:8px 9px; font-size:12px; white-space:pre-wrap; line-height:1.45; color:#d8d8d8; max-height:220px; overflow:auto; }
   canvas { display:block; max-width: 480px; height:auto; }
   #originalCanvas { cursor: crosshair; }
   .controls { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:10px; }
@@ -35,6 +40,16 @@
   <div class="canvas-box">
     <p>Grayscale Line Graph</p>
     <canvas id="graphCanvas" width="480" height="320"></canvas>
+  </div>
+  <div class="analysis-box">
+    <div class="peak-panel">
+      <button id="peakValuesToggle" class="peak-toggle" type="button" data-title="Peak Y values">Peak Y values ▼</button>
+      <div id="peakValuesPanel" class="peak-content">데이터 없음</div>
+    </div>
+    <div class="peak-panel">
+      <button id="peakSidesToggle" class="peak-toggle" type="button" data-title="Peak sides">Peak sides ▼</button>
+      <div id="peakSidesPanel" class="peak-content">데이터 없음</div>
+    </div>
   </div>
 </div>
 

@@ -7,6 +7,8 @@ const graphCanvas = document.getElementById('graphCanvas');
 const yInput = document.getElementById('yInput');
 const lineCountInput = document.getElementById('lineCountInput');
 const statusEl = document.getElementById('status');
+const peakValuesPanelEl = document.getElementById('peakValuesPanel');
+const peakSidesPanelEl = document.getElementById('peakSidesPanel');
 
 // ---------- State ----------
 // sourceCanvas holds the PURE, untouched pixel data of the pasted image.
@@ -24,6 +26,159 @@ let dragStartX = 0, dragStartY = 0;
 // Last snapshot kept in memory (also logged to console).
 let currentSnapshot = null;
 let selectedCumulateLine = 'all';
+
+function setPanelText(el, text) {
+  if (!el) return;
+  el.textContent = text || '데이터 없음';
+}
+
+function togglePeakPanel(panelId, buttonId) {
+  const panel = document.getElementById(panelId);
+  const button = document.getElementById(buttonId);
+  if (!panel || !button) return;
+
+  const currentDisplay = window.getComputedStyle(panel).display;
+  const isOpen = currentDisplay !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+
+  const title = button.dataset.title || button.textContent.replace(/\s[▼▲]$/, '');
+  button.textContent = `${title} ${isOpen ? '▼' : '▲'}`;
+}
+
+function findPeaks(values, options = {}) {
+  if (!Array.isArray(values) || values.length < 3) return [];
+  const peaks = [];
+  for (let i = 1; i < values.length - 1; i++) {
+    const left = values[i - 1];
+    const current = values[i];
+    const right = values[i + 1];
+    if (current > left && current > right) {
+      peaks.push(i);
+    }
+  }
+  return peaks;
+}
+
+function analyzePeakSides(values, peakIndices, options = {}) {
+  if (!Array.isArray(values) || !Array.isArray(peakIndices) || peakIndices.length === 0) return [];
+
+  const results = [];
+  for (const peakIndex of peakIndices) {
+    if (typeof peakIndex !== 'number' || peakIndex < 0 || peakIndex >= values.length) continue;
+
+    let leftReboundIndex = -1;
+    for (let i = peakIndex - 1; i >= 1; i--) {
+      if (values[i - 1] > values[i]) {
+        leftReboundIndex = i;
+        break;
+      }
+    }
+
+    let rightReboundIndex = -1;
+    for (let i = peakIndex + 1; i <= values.length - 2; i++) {
+      if (values[i + 1] > values[i]) {
+        rightReboundIndex = i;
+        break;
+      }
+    }
+
+    results.push({
+      peakIndex,
+      peakValue: values[peakIndex],
+      leftReboundIndex,
+      rightReboundIndex,
+      leftDistance: leftReboundIndex >= 0 ? peakIndex - leftReboundIndex : -1,
+      rightDistance: rightReboundIndex >= 0 ? rightReboundIndex - peakIndex : -1
+    });
+  }
+
+  return results;
+}
+
+function formatPeakValuesForDisplay(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return '데이터 없음';
+
+  const rows = [];
+  for (const line of lines) {
+    const values = Array.isArray(line.peakValues) ? line.peakValues : [];
+    const label = line.label || 'L?';
+    rows.push(`${label}: [${values.join(', ')}]`);
+  }
+
+  return rows.length > 0 ? rows.join('\n') : '데이터 없음';
+}
+
+function formatPeakSidesForDisplay(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return '데이터 없음';
+
+  const out = [];
+  for (const line of lines) {
+    out.push(`${line.label || 'L?'}`);
+    const sides = Array.isArray(line.sides) ? line.sides : [];
+    if (sides.length === 0) {
+      out.push('-');
+      continue;
+    }
+    for (const item of sides) {
+      out.push(
+        `peakIndex=${item.peakIndex}, peakValue=${item.peakValue}, leftReboundIndex=${item.leftReboundIndex}, rightReboundIndex=${item.rightReboundIndex}, leftDistance=${item.leftDistance}, rightDistance=${item.rightDistance}`
+      );
+    }
+  }
+
+  return out.join('\n');
+}
+
+function getActiveLinesFromGraphState() {
+  if (!currentSnapshot || typeof currentSnapshot !== 'object') return [];
+
+  if (currentSnapshot.type === 'grayscale-line') {
+    if (!Array.isArray(currentSnapshot.values) || currentSnapshot.values.length === 0) return [];
+    return [{ label: 'L1', values: currentSnapshot.values }];
+  }
+
+  if (currentSnapshot.type === 'cumulate-lines') {
+    if (!Array.isArray(currentSnapshot.lines) || currentSnapshot.lines.length === 0) return [];
+
+    if (selectedCumulateLine === 'all') {
+      return currentSnapshot.lines.map((line, index) => ({
+        label: `L${index + 1}`,
+        values: Array.isArray(line.values) ? line.values : []
+      }));
+    }
+
+    const target = Number(selectedCumulateLine);
+    if (!Number.isInteger(target) || target < 0 || target >= currentSnapshot.lines.length) return [];
+    const line = currentSnapshot.lines[target];
+    return [{ label: `L${target + 1}`, values: Array.isArray(line.values) ? line.values : [] }];
+  }
+
+  return [];
+}
+
+function updatePeakPanelsFromCurrentGraphState() {
+  const lines = getActiveLinesFromGraphState();
+  if (!lines || lines.length === 0) {
+    setPanelText(peakValuesPanelEl, '데이터 없음');
+    setPanelText(peakSidesPanelEl, '데이터 없음');
+    return;
+  }
+
+  const analyzed = lines.map((line) => {
+    const values = Array.isArray(line.values) ? line.values : [];
+    const peakIndices = findPeaks(values, {});
+    const sides = analyzePeakSides(values, peakIndices, {});
+    return {
+      label: line.label,
+      peakIndices,
+      peakValues: peakIndices.map((idx) => values[idx]),
+      sides
+    };
+  });
+
+  setPanelText(peakValuesPanelEl, formatPeakValuesForDisplay(analyzed));
+  setPanelText(peakSidesPanelEl, formatPeakSidesForDisplay(analyzed));
+}
 
 // ---------- Status helper ----------
 function setStatus(msg, isError) {
@@ -87,8 +242,10 @@ function loadImageIntoCanvases(bitmap) {
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
     currentSnapshot = buildGrayscaleSnapshot(midY, selection.xMin, selection.xMax, values);
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역이 자동 적용되었습니다. 드래그로 직접 영역을 바꿀 수 있습니다.`);
   } catch (err) {
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역을 적용했지만 그래프 생성 중 오류가 발생했습니다: ${err.message}`, true);
   }
 }
@@ -152,6 +309,8 @@ function moveSelectionBy(dx, dy) {
       drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
     }
   }
+
+  updatePeakPanelsFromCurrentGraphState();
 
   setStatus(`선택 영역 이동: X[${selection.xMin}, ${selection.xMax}], Y 중앙=${midY}`);
 }
@@ -304,7 +463,13 @@ function renderCumulateSelector(snapshot) {
   if (!snapshot || snapshot.type !== 'cumulate-lines' || !Array.isArray(snapshot.lines) || snapshot.lines.length === 0) {
     container.style.display = 'none';
     container.innerHTML = '';
+    selectedCumulateLine = 'all';
     return;
+  }
+
+  const selectedIndex = Number(selectedCumulateLine);
+  if (selectedCumulateLine !== 'all' && (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= snapshot.lines.length)) {
+    selectedCumulateLine = 'all';
   }
 
   container.innerHTML = '';
@@ -318,6 +483,7 @@ function renderCumulateSelector(snapshot) {
     if (!allInput.checked) return;
     selectedCumulateLine = 'all';
     drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`cumulate 표시: 전체 라인 (${currentSnapshot.lines.length}개)`);
   });
   allLabel.appendChild(allInput);
@@ -335,6 +501,7 @@ function renderCumulateSelector(snapshot) {
       if (!input.checked) return;
       selectedCumulateLine = String(index);
       drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+      updatePeakPanelsFromCurrentGraphState();
       setStatus(`cumulate 표시: line ${index + 1} (${line.label || `y=${line.y}`})`);
     });
 
@@ -354,6 +521,7 @@ function drawSingleGrayscaleGraph(canvas, snapshot) {
     selector.style.display = 'none';
     selector.innerHTML = '';
   }
+  selectedCumulateLine = 'all';
   if (!snapshot || !Array.isArray(snapshot.values) || snapshot.values.length === 0) {
     setStatus('그릴 데이터가 없습니다.', true);
     return;
@@ -418,6 +586,7 @@ function restoreGraphFromJson(jsonText) {
     };
     currentSnapshot = snapshot;
     drawSingleGrayscaleGraph(graphCanvas, snapshot);
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`grayscale-line 복원 완료 (fixedY=${snapshot.fixedY}, 샘플 ${snapshot.values.length}개)`);
   } else if (parsed.type === 'cumulate-lines') {
     if (!Array.isArray(parsed.lines) || parsed.lines.length === 0) {
@@ -452,6 +621,7 @@ function restoreGraphFromJson(jsonText) {
     selectedCumulateLine = 'all';
     renderCumulateSelector(snapshot);
     drawCumulatedGrayscaleGraph(graphCanvas, snapshot, selectedCumulateLine);
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`cumulate-lines 복원 완료 (라인 ${snapshot.lines.length}개)`);
   } else {
     setStatus(`알 수 없는 type 값입니다: ${parsed.type}`, true);
@@ -470,6 +640,7 @@ document.getElementById('btnGrayscale').addEventListener('click', () => {
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
     selectedCumulateLine = 'all';
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], 64개 샘플`);
     console.log('grayscale snapshot', currentSnapshot);
   } catch (err) {
@@ -498,6 +669,7 @@ document.getElementById('btnCumulate').addEventListener('click', () => {
     selectedCumulateLine = 'all';
     renderCumulateSelector(currentSnapshot);
     drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+    updatePeakPanelsFromCurrentGraphState();
     setStatus(`cumulate 완료: baseY=${baseY}, 라인 ${lines.length}개, X[${xMin}, ${xMax}]`);
     console.log('cumulate snapshot', currentSnapshot);
   } catch (err) {
@@ -513,3 +685,13 @@ document.getElementById('btnPasteJson').addEventListener('click', async () => {
     setStatus('클립보드를 읽을 수 없습니다: ' + err.message, true);
   }
 });
+
+document.getElementById('peakValuesToggle').addEventListener('click', () => {
+  togglePeakPanel('peakValuesPanel', 'peakValuesToggle');
+});
+
+document.getElementById('peakSidesToggle').addEventListener('click', () => {
+  togglePeakPanel('peakSidesPanel', 'peakSidesToggle');
+});
+
+updatePeakPanelsFromCurrentGraphState();
