@@ -37,6 +37,11 @@ let analysisOptions = {
   reboundMode: 'first-rise',
   reboundDelta: 1
 };
+let hoverGuideState = {
+  active: false,
+  sampleIndex: -1,
+  canvasX: 0
+};
 
 function parseNonNegativeInt(value, fallback) {
   const n = Number.parseInt(value, 10);
@@ -251,6 +256,62 @@ function getGraphCanvasCoords(evt) {
   };
 }
 
+function getSampleIndexFromCanvasX(canvasX, sampleCount) {
+  const left = 30;
+  const right = graphCanvas.width - 10;
+  if (sampleCount <= 0 || canvasX < left || canvasX > right) return -1;
+  const indexRatio = (canvasX - left) / Math.max(1, right - left);
+  return Math.max(0, Math.min(sampleCount - 1, Math.round(indexRatio * (sampleCount - 1))));
+}
+
+function drawGraphHoverGuide() {
+  if (!hoverGuideState.active) return;
+
+  const ctx = graphCanvas.getContext('2d');
+  const left = 30;
+  const right = graphCanvas.width - 10;
+  const top = 10;
+  const bottom = graphCanvas.height - 30;
+  const x = Math.max(left, Math.min(right, hoverGuideState.canvasX));
+
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bottom);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const label = `idx ${hoverGuideState.sampleIndex}`;
+  ctx.font = '11px sans-serif';
+  const textWidth = ctx.measureText(label).width;
+  const boxX = Math.max(left, Math.min(right - textWidth - 10, x + 5));
+  const boxY = top + 4;
+  ctx.fillStyle = 'rgba(20,20,20,0.88)';
+  ctx.fillRect(boxX, boxY, textWidth + 8, 14);
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fillText(label, boxX + 4, boxY + 11);
+  ctx.restore();
+}
+
+function renderCurrentGraphWithHoverGuide() {
+  if (!currentSnapshot || typeof currentSnapshot !== 'object') {
+    const ctx = graphCanvas.getContext('2d');
+    ctx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+    return;
+  }
+
+  if (currentSnapshot.type === 'grayscale-line') {
+    drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+  } else if (currentSnapshot.type === 'cumulate-lines') {
+    drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+  }
+
+  drawGraphHoverGuide();
+}
+
 function setGraphHoverInfo(text) {
   if (!graphHoverInfoEl) return;
   graphHoverInfoEl.textContent = text;
@@ -260,26 +321,36 @@ function updateGraphHoverInfo(evt) {
   if (!evt) return;
   const lines = getActiveLinesFromGraphState();
   if (!lines || lines.length === 0) {
+    hoverGuideState.active = false;
+    renderCurrentGraphWithHoverGuide();
     setGraphHoverInfo('graph cursor: x=-, y=-, color=데이터 없음');
     return;
   }
 
   const coords = getGraphCanvasCoords(evt);
-  const left = 30;
-  const right = graphCanvas.width - 10;
-  if (coords.x < left || coords.x > right) {
+  const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
+  const sampleIndex = getSampleIndexFromCanvasX(coords.x, sampleCount);
+  if (sampleIndex < 0) {
+    hoverGuideState.active = false;
+    renderCurrentGraphWithHoverGuide();
     setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, color=-`);
     return;
   }
 
-  const indexRatio = (coords.x - left) / Math.max(1, right - left);
-  const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
   if (sampleCount <= 0) {
+    hoverGuideState.active = false;
+    renderCurrentGraphWithHoverGuide();
     setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, color=데이터 없음`);
     return;
   }
 
-  const sampleIndex = Math.max(0, Math.min(sampleCount - 1, Math.round(indexRatio * (sampleCount - 1))));
+  const left = 30;
+  const right = graphCanvas.width - 10;
+  const sampleX = left + (sampleIndex / Math.max(1, sampleCount - 1)) * (right - left);
+  hoverGuideState.active = true;
+  hoverGuideState.sampleIndex = sampleIndex;
+  hoverGuideState.canvasX = sampleX;
+
   const parts = [];
   for (const line of lines) {
     if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
@@ -288,6 +359,7 @@ function updateGraphHoverInfo(evt) {
   }
 
   const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
+  renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}`);
 }
 
@@ -835,6 +907,8 @@ graphCanvas.addEventListener('mousemove', (event) => {
 });
 
 graphCanvas.addEventListener('mouseleave', () => {
+  hoverGuideState.active = false;
+  renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
 });
 
