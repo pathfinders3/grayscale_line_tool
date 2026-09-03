@@ -388,7 +388,7 @@ function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
   }, durationMs);
 }
 
-function getPlateauStatusForSampleIndex(sampleIndex, lines) {
+function getPeakStatusForSampleIndex(sampleIndex, lines) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines) || lines.length === 0) {
     return 'n/a';
   }
@@ -398,9 +398,8 @@ function getPlateauStatusForSampleIndex(sampleIndex, lines) {
     if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
 
     const peakIndices = findPeaks(line.values, analysisOptions);
-    const matchesPeak = peakIndices.includes(sampleIndex);
-    const plateauValue = analysisOptions.peakMode === 'plateau' ? matchesPeak : false;
-    statusParts.push(`${line.label}:${plateauValue ? 'yes' : 'no'}`);
+    const isPeak = peakIndices.includes(sampleIndex);
+    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}`);
   }
 
   return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
@@ -452,9 +451,9 @@ function updateGraphHoverInfo(evt) {
   }
 
   const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
-  const plateauText = getPlateauStatusForSampleIndex(sampleIndex, lines);
+  const peakText = getPeakStatusForSampleIndex(sampleIndex, lines);
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}, plateau=${plateauText}`);
+  setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}, ${peakText}`);
 }
 
 function getPeakValueSummaryForCurrentGraph() {
@@ -1132,8 +1131,8 @@ graphCanvas.addEventListener('click', (event) => {
   }
 
   const valueText = valueParts.length > 0 ? valueParts.join(', ') : '데이터 없음';
-  const plateauText = getPlateauStatusForSampleIndex(sampleIndex, activeLines);
-  setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, plateau=${plateauText}`);
+  const peakText = getPeakStatusForSampleIndex(sampleIndex, activeLines);
+  setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText}`);
   showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
 });
 
