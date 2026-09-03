@@ -36,7 +36,8 @@ let analysisOptions = {
   peakMode: 'strict',
   plateauTolerance: 0,
   reboundMode: 'first-rise',
-  reboundDelta: 1
+  reboundDelta: 1,
+  peakThresholdRatio: 0.75
 };
 let hoverGuideState = {
   active: false,
@@ -103,73 +104,90 @@ function togglePeakPanel(panelId, buttonId) {
   button.textContent = `${title} ${isOpen ? '▼' : '▲'}`;
 }
 
+function getPeakThresholdRatio(options = {}) {
+  const ratio = Number(options.peakThresholdRatio);
+  if (!Number.isFinite(ratio) || ratio <= 0 || ratio >= 1) return 0.75;
+  return ratio;
+}
+
 function findPeaks(values, options = {}) {
-  if (!Array.isArray(values) || values.length < 3) return [];
+  if (!Array.isArray(values) || values.length === 0) return [];
 
-  const peakMode = options.peakMode === 'plateau' ? 'plateau' : 'strict';
-  const tolerance = parseNonNegativeInt(options.plateauTolerance, 0);
+  const thresholdRatio = getPeakThresholdRatio(options);
+  const maxValue = Math.max(...values);
+  const threshold = maxValue * thresholdRatio;
+  const aboveThresholdIndices = values.reduce((acc, value, index) => {
+    if (value >= threshold) acc.push(index);
+    return acc;
+  }, []);
 
-  if (peakMode === 'strict') {
-    const peaks = [];
-    for (let i = 1; i < values.length - 1; i++) {
-      const left = values[i - 1];
-      const current = values[i];
-      const right = values[i + 1];
-      if (current - left > tolerance && current - right > tolerance) {
-        peaks.push(i);
-      }
-    }
-    return peaks;
-  }
+  if (aboveThresholdIndices.length === 0) return [];
 
   const peaks = [];
-  let i = 1;
-  while (i < values.length - 1) {
-    const start = i;
-    let end = i;
-    while (end + 1 < values.length && Math.abs(values[end + 1] - values[start]) <= tolerance) {
-      end += 1;
+  let index = 0;
+  while (index < aboveThresholdIndices.length) {
+    const start = aboveThresholdIndices[index];
+    let end = start;
+    while (index + 1 < aboveThresholdIndices.length && aboveThresholdIndices[index + 1] === end + 1) {
+      end = aboveThresholdIndices[index + 1];
+      index += 1;
     }
 
-    if (start > 0 && end < values.length - 1) {
-      const top = values[start];
-      const left = values[start - 1];
-      const right = values[end + 1];
-      if (top - left > tolerance && top - right > tolerance) {
-        peaks.push(Math.floor((start + end) / 2));
-      }
+    const segment = [];
+    for (let i = start; i <= end; i++) {
+      segment.push(i);
     }
-    i = end + 1;
+
+    const segmentMax = Math.max(...segment.map((i) => values[i]));
+    const plateauIndices = segment.filter((i) => values[i] >= segmentMax - 1e-9);
+    for (const i of plateauIndices) {
+      if (!peaks.includes(i)) peaks.push(i);
+    }
+
+    index += 1;
   }
 
-  return peaks;
+  return peaks.sort((a, b) => a - b);
 }
 
 function analyzePeakSides(values, peakIndices, options = {}) {
   if (!Array.isArray(values) || !Array.isArray(peakIndices) || peakIndices.length === 0) return [];
 
-  const reboundMode = options.reboundMode === 'delta-rise' ? 'delta-rise' : 'first-rise';
-  const reboundDelta = parsePositiveInt(options.reboundDelta, 1);
-
+  const thresholdRatio = getPeakThresholdRatio(options);
+  const maxValue = Math.max(...values);
+  const threshold = maxValue * thresholdRatio;
   const results = [];
+
   for (const peakIndex of peakIndices) {
     if (typeof peakIndex !== 'number' || peakIndex < 0 || peakIndex >= values.length) continue;
 
     let leftReboundIndex = -1;
-    for (let i = peakIndex - 1; i >= 1; i--) {
-      const rises = values[i - 1] > values[i];
-      const risesByDelta = values[i - 1] >= values[i] + reboundDelta;
-      if ((reboundMode === 'first-rise' && rises) || (reboundMode === 'delta-rise' && risesByDelta)) {
+    for (let i = peakIndex; i >= 1; i--) {
+      if (values[i] >= threshold && values[i - 1] >= threshold) {
+        leftReboundIndex = i - 1;
+        continue;
+      }
+      if (values[i - 1] < threshold && values[i] >= threshold) {
+        leftReboundIndex = i;
+        break;
+      }
+      if (values[i] < threshold && values[i - 1] < threshold) {
         leftReboundIndex = i;
         break;
       }
     }
 
     let rightReboundIndex = -1;
-    for (let i = peakIndex + 1; i <= values.length - 2; i++) {
-      const rises = values[i + 1] > values[i];
-      const risesByDelta = values[i + 1] >= values[i] + reboundDelta;
-      if ((reboundMode === 'first-rise' && rises) || (reboundMode === 'delta-rise' && risesByDelta)) {
+    for (let i = peakIndex; i <= values.length - 2; i++) {
+      if (values[i] >= threshold && values[i + 1] >= threshold) {
+        rightReboundIndex = i + 1;
+        continue;
+      }
+      if (values[i] >= threshold && values[i + 1] < threshold) {
+        rightReboundIndex = i;
+        break;
+      }
+      if (values[i] < threshold && values[i + 1] < threshold) {
         rightReboundIndex = i;
         break;
       }
@@ -181,7 +199,8 @@ function analyzePeakSides(values, peakIndices, options = {}) {
       leftReboundIndex,
       rightReboundIndex,
       leftDistance: leftReboundIndex >= 0 ? peakIndex - leftReboundIndex : -1,
-      rightDistance: rightReboundIndex >= 0 ? rightReboundIndex - peakIndex : -1
+      rightDistance: rightReboundIndex >= 0 ? rightReboundIndex - peakIndex : -1,
+      threshold
     });
   }
 
@@ -454,6 +473,22 @@ function getPeakValueSummaryForCurrentGraph() {
   return summaries.length > 0 ? `peak values: ${summaries.join(' | ')}` : 'peak values: 없음';
 }
 
+function getPeakThresholdSummaryForCurrentGraph() {
+  const lines = getActiveLinesFromGraphState();
+  if (!Array.isArray(lines) || lines.length === 0) return 'threshold: 없음';
+
+  const thresholds = [];
+  for (const line of lines) {
+    const values = Array.isArray(line.values) ? line.values : [];
+    if (values.length === 0) continue;
+    const maxValue = Math.max(...values);
+    const threshold = maxValue * getPeakThresholdRatio(analysisOptions);
+    thresholds.push(`${line.label}: ${threshold.toFixed(1)}`);
+  }
+
+  return thresholds.length > 0 ? `threshold: ${thresholds.join(' | ')}` : 'threshold: 없음';
+}
+
 function updatePeakPanelsFromCurrentGraphState() {
   syncAnalysisOptionsFromInputs();
   const lines = getActiveLinesFromGraphState();
@@ -478,6 +513,22 @@ function updatePeakPanelsFromCurrentGraphState() {
   setPanelText(peakValuesPanelEl, formatPeakValuesForDisplay(analyzed));
   setPanelText(peakSidesPanelEl, formatPeakSidesForDisplay(analyzed));
 }
+
+function formatThresholdSummaryForDisplay(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return 'threshold: 없음';
+
+  const parts = [];
+  for (const line of lines) {
+    const values = Array.isArray(line.values) ? line.values : [];
+    if (values.length === 0) continue;
+    const maxValue = Math.max(...values);
+    const threshold = maxValue * getPeakThresholdRatio(analysisOptions);
+    parts.push(`${line.label}: ${threshold.toFixed(1)}`);
+  }
+
+  return parts.length > 0 ? `threshold: ${parts.join(' | ')}` : 'threshold: 없음';
+}
+
 
 // ---------- Status helper ----------
 function setStatus(msg, isError) {
