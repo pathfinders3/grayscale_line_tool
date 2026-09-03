@@ -369,6 +369,24 @@ function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
   }, durationMs);
 }
 
+function getPlateauStatusForSampleIndex(sampleIndex, lines) {
+  if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines) || lines.length === 0) {
+    return 'n/a';
+  }
+
+  const statusParts = [];
+  for (const line of lines) {
+    if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
+
+    const peakIndices = findPeaks(line.values, analysisOptions);
+    const matchesPeak = peakIndices.includes(sampleIndex);
+    const plateauValue = analysisOptions.peakMode === 'plateau' ? matchesPeak : false;
+    statusParts.push(`${line.label}:${plateauValue ? 'yes' : 'no'}`);
+  }
+
+  return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
+}
+
 function updateGraphHoverInfo(evt) {
   if (!evt) return;
   const lines = getActiveLinesFromGraphState();
@@ -415,8 +433,9 @@ function updateGraphHoverInfo(evt) {
   }
 
   const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
+  const plateauText = getPlateauStatusForSampleIndex(sampleIndex, lines);
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}`);
+  setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}, plateau=${plateauText}`);
 }
 
 function updatePeakPanelsFromCurrentGraphState() {
@@ -1038,6 +1057,16 @@ graphCanvas.addEventListener('click', (event) => {
   const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
     ? getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
     : Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1))));
+
+  const valueParts = [];
+  for (const line of activeLines) {
+    if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
+    valueParts.push(`${line.label}:${line.values[sampleIndex]}`);
+  }
+
+  const valueText = valueParts.length > 0 ? valueParts.join(', ') : '데이터 없음';
+  const plateauText = getPlateauStatusForSampleIndex(sampleIndex, activeLines);
+  setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, plateau=${plateauText}`);
   showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
 });
 
