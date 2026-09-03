@@ -229,7 +229,7 @@ function getActiveLinesFromGraphState() {
 
   if (currentSnapshot.type === 'grayscale-line') {
     if (!Array.isArray(currentSnapshot.values) || currentSnapshot.values.length === 0) return [];
-    return [{ label: 'L1', values: currentSnapshot.values }];
+    return [{ label: 'Ln1', values: currentSnapshot.values }];
   }
 
   if (currentSnapshot.type === 'cumulate-lines') {
@@ -237,7 +237,7 @@ function getActiveLinesFromGraphState() {
 
     if (selectedCumulateLine === 'all') {
       return currentSnapshot.lines.map((line, index) => ({
-        label: `L${index + 1}`,
+        label: `Ln${index + 1}`,
         values: Array.isArray(line.values) ? line.values : []
       }));
     }
@@ -245,7 +245,7 @@ function getActiveLinesFromGraphState() {
     const target = Number(selectedCumulateLine);
     if (!Number.isInteger(target) || target < 0 || target >= currentSnapshot.lines.length) return [];
     const line = currentSnapshot.lines[target];
-    return [{ label: `L${target + 1}`, values: Array.isArray(line.values) ? line.values : [] }];
+    return [{ label: `Ln${target + 1}`, values: Array.isArray(line.values) ? line.values : [] }];
   }
 
   return [];
@@ -436,6 +436,22 @@ function updateGraphHoverInfo(evt) {
   const plateauText = getPlateauStatusForSampleIndex(sampleIndex, lines);
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}, plateau=${plateauText}`);
+}
+
+function getPeakValueSummaryForCurrentGraph() {
+  const lines = getActiveLinesFromGraphState();
+  if (!Array.isArray(lines) || lines.length === 0) return 'peak values: 없음';
+
+  const summaries = [];
+  for (const line of lines) {
+    const values = Array.isArray(line.values) ? line.values : [];
+    const peakIndices = findPeaks(values, analysisOptions);
+    if (peakIndices.length === 0) continue;
+    const peakValues = peakIndices.map((idx) => values[idx]);
+    summaries.push(`${line.label}: [${peakValues.join(', ')}]`);
+  }
+
+  return summaries.length > 0 ? `peak values: ${summaries.join(' | ')}` : 'peak values: 없음';
 }
 
 function updatePeakPanelsFromCurrentGraphState() {
@@ -981,7 +997,7 @@ document.getElementById('btnGrayscale').addEventListener('click', () => {
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
     showTemporaryOriginalGuideLine(fixedY, 15000);
     updatePeakPanelsFromCurrentGraphState();
-    setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], 64개 샘플`);
+    setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], 64개 샘플 | ${getPeakValueSummaryForCurrentGraph()}`);
     console.log('grayscale snapshot', currentSnapshot);
   } catch (err) {
     setStatus('오류: ' + err.message, true);
@@ -1011,7 +1027,7 @@ document.getElementById('btnCumulate').addEventListener('click', () => {
     drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
     showTemporaryOriginalGuideLine(lines[0].y, 15000);
     updatePeakPanelsFromCurrentGraphState();
-    setStatus(`cumulate 완료: baseY=${baseY}, 라인 ${lines.length}개, X[${xMin}, ${xMax}]`);
+    setStatus(`cumulate 완료: baseY=${baseY}, 라인 ${lines.length}개, X[${xMin}, ${xMax}] | ${getPeakValueSummaryForCurrentGraph()}`);
     console.log('cumulate snapshot', currentSnapshot);
   } catch (err) {
     setStatus('오류: ' + err.message, true);
