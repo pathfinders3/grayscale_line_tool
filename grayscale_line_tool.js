@@ -162,34 +162,57 @@ function analyzePeakSides(values, peakIndices, options = {}) {
     if (typeof peakIndex !== 'number' || peakIndex < 0 || peakIndex >= values.length) continue;
 
     let leftReboundIndex = -1;
+    let sawBelowThresholdLeft = false;
     for (let i = peakIndex; i >= 1; i--) {
-      if (values[i] >= threshold && values[i - 1] >= threshold) {
-        leftReboundIndex = i - 1;
-        continue;
+      const current = values[i];
+      const previous = values[i - 1];
+
+      if (!sawBelowThresholdLeft) {
+        if (current >= threshold && previous >= threshold) continue;
+        if (current < threshold || previous < threshold) {
+          sawBelowThresholdLeft = true;
+          continue;
+        }
       }
-      if (values[i - 1] < threshold && values[i] >= threshold) {
-        leftReboundIndex = i;
-        break;
-      }
-      if (values[i] < threshold && values[i - 1] < threshold) {
-        leftReboundIndex = i;
-        break;
+
+      if (sawBelowThresholdLeft) {
+        if (current >= threshold && previous < threshold) {
+          leftReboundIndex = i;
+          break;
+        }
+        if (current >= threshold && previous >= threshold) {
+          leftReboundIndex = i;
+          break;
+        }
       }
     }
 
     let rightReboundIndex = -1;
+    let sawBelowThresholdRight = false;
     for (let i = peakIndex; i <= values.length - 2; i++) {
-      if (values[i] >= threshold && values[i + 1] >= threshold) {
-        rightReboundIndex = i + 1;
-        continue;
+      const current = values[i];
+      const next = values[i + 1];
+
+      if (!sawBelowThresholdRight) {
+        if (current >= threshold && next >= threshold) continue;
+        if (current >= threshold && next < threshold) {
+          sawBelowThresholdRight = true;
+          continue;
+        }
+        if (current < threshold && next < threshold) {
+          sawBelowThresholdRight = true;
+          continue;
+        }
       }
-      if (values[i] >= threshold && values[i + 1] < threshold) {
-        rightReboundIndex = i;
-        break;
-      }
-      if (values[i] < threshold && values[i + 1] < threshold) {
-        rightReboundIndex = i;
-        break;
+
+      if (sawBelowThresholdRight) {
+        if (current < threshold && next >= threshold) {
+          rightReboundIndex = i + 1;
+          break;
+        }
+        if (current < threshold && next < threshold) {
+          continue;
+        }
       }
     }
 
@@ -434,7 +457,14 @@ function getPeakStatusForSampleIndex(sampleIndex, lines) {
     const plateauRange = getPlateauRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
     const plateauText = plateauRange ? `[${plateauRange.plateauStart}]~[${plateauRange.plateauEnd}]` : 'none';
     const hillText = plateauRange ? `[${plateauRange.hillStart}]~[${plateauRange.hillEnd}]` : 'none';
-    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}, plateau=${plateauText}, hill=${hillText}`);
+
+    const peakSides = analyzePeakSides(line.values, peakIndices, analysisOptions);
+    const currentPeakSide = peakSides.find((item) => item.peakIndex === sampleIndex) || null;
+    const reboundText = currentPeakSide
+      ? `[${currentPeakSide.leftReboundIndex >= 0 ? currentPeakSide.leftReboundIndex : 'x'}]~[${currentPeakSide.rightReboundIndex >= 0 ? currentPeakSide.rightReboundIndex : 'x'}]`
+      : 'none';
+
+    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}, plateau=${plateauText}, hill=${hillText}, rebound=${reboundText}`);
   }
 
   return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
