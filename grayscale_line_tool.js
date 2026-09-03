@@ -388,6 +388,38 @@ function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
   }, durationMs);
 }
 
+function getPlateauRangeForSampleIndex(sampleIndex, values, options = {}) {
+  if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(values) || values.length === 0) {
+    return null;
+  }
+
+  const thresholdRatio = getPeakThresholdRatio(options);
+  const maxValue = Math.max(...values);
+  const threshold = maxValue * thresholdRatio;
+  if (values[sampleIndex] < threshold) return null;
+
+  let left = sampleIndex;
+  while (left > 0 && values[left - 1] >= threshold) left -= 1;
+
+  let right = sampleIndex;
+  while (right < values.length - 1 && values[right + 1] >= threshold) right += 1;
+
+  const peakValue = values[sampleIndex];
+  let plateauLeft = sampleIndex;
+  while (plateauLeft > left && values[plateauLeft - 1] >= peakValue - 1e-9) plateauLeft -= 1;
+
+  let plateauRight = sampleIndex;
+  while (plateauRight < right && values[plateauRight + 1] >= peakValue - 1e-9) plateauRight += 1;
+
+  return {
+    hillStart: left,
+    hillEnd: right,
+    plateauStart: plateauLeft,
+    plateauEnd: plateauRight,
+    peakValue
+  };
+}
+
 function getPeakStatusForSampleIndex(sampleIndex, lines) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines) || lines.length === 0) {
     return 'n/a';
@@ -399,7 +431,9 @@ function getPeakStatusForSampleIndex(sampleIndex, lines) {
 
     const peakIndices = findPeaks(line.values, analysisOptions);
     const isPeak = peakIndices.includes(sampleIndex);
-    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}`);
+    const plateauRange = getPlateauRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
+    const plateauText = plateauRange ? `[${plateauRange.plateauStart}]~[${plateauRange.plateauEnd}]` : 'none';
+    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}, plateau=${plateauText}`);
   }
 
   return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
