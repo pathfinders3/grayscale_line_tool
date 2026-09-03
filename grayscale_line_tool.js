@@ -433,7 +433,8 @@ function getPeakStatusForSampleIndex(sampleIndex, lines) {
     const isPeak = peakIndices.includes(sampleIndex);
     const plateauRange = getPlateauRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
     const plateauText = plateauRange ? `[${plateauRange.plateauStart}]~[${plateauRange.plateauEnd}]` : 'none';
-    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}, plateau=${plateauText}`);
+    const hillText = plateauRange ? `[${plateauRange.hillStart}]~[${plateauRange.hillEnd}]` : 'none';
+    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}, plateau=${plateauText}, hill=${hillText}`);
   }
 
   return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
