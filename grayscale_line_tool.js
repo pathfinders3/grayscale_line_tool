@@ -45,7 +45,8 @@ let hoverGuideState = {
 };
 let originalGuideLineY = null;
 let originalGuideLineX = null;
-let originalGuideLineTimer = null;
+let originalGuideLineYTimer = null;
+let originalGuideLineXTimer = null;
 
 function parseNonNegativeInt(value, fallback) {
   const n = Number.parseInt(value, 10);
@@ -340,16 +341,14 @@ function showTemporaryOriginalGuideLine(y, durationMs = 15000) {
   if (!hasImage || !sourceCanvas) return;
   const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
   originalGuideLineY = clampedY;
-  originalGuideLineX = null;
-  if (originalGuideLineTimer) {
-    clearTimeout(originalGuideLineTimer);
-    originalGuideLineTimer = null;
+  if (originalGuideLineYTimer) {
+    clearTimeout(originalGuideLineYTimer);
+    originalGuideLineYTimer = null;
   }
   redrawOriginalCanvas();
-  originalGuideLineTimer = setTimeout(() => {
+  originalGuideLineYTimer = setTimeout(() => {
     originalGuideLineY = null;
-    originalGuideLineX = null;
-    originalGuideLineTimer = null;
+    originalGuideLineYTimer = null;
     redrawOriginalCanvas();
   }, durationMs);
 }
@@ -358,16 +357,14 @@ function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
   if (!hasImage || !sourceCanvas) return;
   const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
   originalGuideLineX = clampedX;
-  originalGuideLineY = null;
-  if (originalGuideLineTimer) {
-    clearTimeout(originalGuideLineTimer);
-    originalGuideLineTimer = null;
+  if (originalGuideLineXTimer) {
+    clearTimeout(originalGuideLineXTimer);
+    originalGuideLineXTimer = null;
   }
   redrawOriginalCanvas();
-  originalGuideLineTimer = setTimeout(() => {
+  originalGuideLineXTimer = setTimeout(() => {
     originalGuideLineX = null;
-    originalGuideLineY = null;
-    originalGuideLineTimer = null;
+    originalGuideLineXTimer = null;
     redrawOriginalCanvas();
   }, durationMs);
 }
@@ -500,9 +497,13 @@ function loadImageIntoCanvases(bitmap) {
   originalCanvas.width = bitmap.width;
   originalCanvas.height = bitmap.height;
   hasImage = true;
-  if (originalGuideLineTimer) {
-    clearTimeout(originalGuideLineTimer);
-    originalGuideLineTimer = null;
+  if (originalGuideLineYTimer) {
+    clearTimeout(originalGuideLineYTimer);
+    originalGuideLineYTimer = null;
+  }
+  if (originalGuideLineXTimer) {
+    clearTimeout(originalGuideLineXTimer);
+    originalGuideLineXTimer = null;
   }
   originalGuideLineY = null;
   originalGuideLineX = null;
