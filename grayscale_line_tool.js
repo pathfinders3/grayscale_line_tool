@@ -43,7 +43,8 @@ let analysisOptions = {
 let hoverGuideState = {
   active: false,
   sampleIndex: -1,
-  canvasX: 0
+  canvasX: 0,
+  locked: false
 };
 let originalGuideLineY = null;
 let originalGuideLineX = null;
@@ -515,6 +516,27 @@ function paintGraphGuideAtSampleIndex(sampleIndex) {
 
 function updateGraphHoverInfo(evt) {
   if (!evt) return;
+  if (hoverGuideState.locked) {
+    const lines = getActiveLinesFromGraphState();
+    if (lines && lines.length > 0 && Number.isInteger(hoverGuideState.sampleIndex) && hoverGuideState.sampleIndex >= 0) {
+      const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
+      if (sampleCount > 0) {
+        const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+          ? getOriginalXFromGraphSampleIndex(hoverGuideState.sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+          : null;
+        const valueParts = [];
+        for (const line of lines) {
+          if (!Array.isArray(line.values) || hoverGuideState.sampleIndex >= line.values.length) continue;
+          valueParts.push(`${line.label}:${line.values[hoverGuideState.sampleIndex]}`);
+        }
+        const colorText = valueParts.length > 0 ? valueParts.join(', ') : '데이터 없음';
+        const peakText = getPeakStatusForSampleIndex(hoverGuideState.sampleIndex, lines);
+        setGraphHoverInfo(`graph cursor: x=${mappedX ?? hoverGuideState.sampleIndex}, y=-, sampleIndex=${hoverGuideState.sampleIndex}, color=${colorText}, ${peakText} (locked)`);
+      }
+    }
+    return;
+  }
+
   const lines = getActiveLinesFromGraphState();
   if (!lines || lines.length === 0) {
     hoverGuideState.active = false;
@@ -919,6 +941,21 @@ window.addEventListener('mouseup', () => {
 
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
+  if (event.key === 'Escape') {
+    if (hoverGuideState.locked) {
+      event.preventDefault();
+      hoverGuideState.locked = false;
+      hoverGuideState.active = false;
+      renderCurrentGraphWithHoverGuide();
+      setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
+      if (originalGuideLineX !== null) {
+        originalGuideLineX = null;
+        redrawOriginalCanvas();
+      }
+    }
+    return;
+  }
+
   if (['w', 'a', 's', 'd'].includes(key) === false) return;
   if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
 
@@ -1330,8 +1367,9 @@ graphCanvas.addEventListener('click', (event) => {
   hoverGuideState.active = true;
   hoverGuideState.sampleIndex = sampleIndex;
   hoverGuideState.canvasX = left + (sampleIndex / Math.max(1, sampleCount - 1)) * (right - left);
+  hoverGuideState.locked = true;
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText}`);
+  setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
   showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
   graphCanvas.focus();
 });
@@ -1345,6 +1383,10 @@ graphCanvas.addEventListener('keydown', (event) => {
 });
 
 graphCanvas.addEventListener('mouseleave', () => {
+  if (hoverGuideState.locked) {
+    renderCurrentGraphWithHoverGuide();
+    return;
+  }
   hoverGuideState.active = false;
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
