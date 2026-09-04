@@ -1208,6 +1208,83 @@ function colorForIndex(i, total) {
   return `hsl(${hue}, 80%, 60%)`;
 }
 
+function buildSelectedPlateauJsonPayload() {
+  if (!hasImage || !selection) {
+    return { source: null, plateaus: [] };
+  }
+
+  const lines = getActiveLinesFromGraphState();
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return {
+      source: {
+        xMin: selection.xMin,
+        xMax: selection.xMax,
+        yTop: selection.yTop,
+        yBottom: selection.yBottom
+      },
+      plateaus: []
+    };
+  }
+
+  const payload = {
+    source: {
+      xMin: selection.xMin,
+      xMax: selection.xMax,
+      yTop: selection.yTop,
+      yBottom: selection.yBottom
+    },
+    plateaus: []
+  };
+  const seenKeys = new Set();
+
+  for (const line of lines) {
+    const values = Array.isArray(line.values) ? line.values : [];
+    if (values.length === 0) continue;
+
+    const peakIndices = findPeaks(values, analysisOptions);
+    if (peakIndices.length === 0) continue;
+
+    const baseY = Number.isInteger(currentSnapshot && currentSnapshot.fixedY)
+      ? currentSnapshot.fixedY
+      : (currentSnapshot && Array.isArray(currentSnapshot.lines))
+        ? currentSnapshot.lines.find((entry, index) => {
+            if (selectedCumulateLine === 'all') return true;
+            return String(index) === String(selectedCumulateLine);
+          })?.y ?? Math.round((selection.yTop + selection.yBottom) / 2)
+        : Math.round((selection.yTop + selection.yBottom) / 2);
+
+    for (const peakIndex of peakIndices) {
+      const plateauRange = getPlateauRangeForSampleIndex(peakIndex, values, analysisOptions);
+      if (!plateauRange) continue;
+
+      for (let i = plateauRange.plateauStart; i <= plateauRange.plateauEnd; i++) {
+        const originalX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+          ? getOriginalXFromGraphSampleIndex(i, values.length, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+          : Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((i / Math.max(1, values.length - 1)) * (sourceCanvas.width - 1))));
+
+        if (originalX === null || originalX < selection.xMin || originalX > selection.xMax) continue;
+
+        const uniqueKey = `${line.label || 'line'}:${i}`;
+        if (seenKeys.has(uniqueKey)) continue;
+        seenKeys.add(uniqueKey);
+
+        payload.plateaus.push({
+          x: originalX,
+          y: baseY,
+          value: values[i],
+          sampleIndex: i,
+          peakIndex,
+          rangeStart: plateauRange.plateauStart,
+          rangeEnd: plateauRange.plateauEnd,
+          lineLabel: line.label || 'line'
+        });
+      }
+    }
+  }
+
+  return payload;
+}
+
 // ---------- Rendering ----------
 function drawAxes(ctx, canvas) {
   ctx.save();
@@ -1496,6 +1573,42 @@ document.getElementById('btnCumulate').addEventListener('click', () => {
     console.log('cumulate snapshot', currentSnapshot);
   } catch (err) {
     setStatus('오류: ' + err.message, true);
+  }
+});
+
+document.getElementById('btnExportJson').addEventListener('click', async () => {
+  try {
+    if (!hasImage || !selection) {
+      setStatus('먼저 선택 영역을 지정한 뒤 다시 시도해 주세요.', true);
+      return;
+    }
+
+    const payload = buildSelectedPlateauJsonPayload();
+    if (!Array.isArray(payload.plateaus) || payload.plateaus.length === 0) {
+      setStatus('선택 영역 안에 plateau 좌표가 없습니다.', true);
+      return;
+    }
+
+    const jsonText = JSON.stringify(payload, null, 2);
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(jsonText);
+      setStatus(`plateau JSON 복사 완료 (${payload.plateaus.length}개 좌표)`);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = jsonText;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    setStatus(`plateau JSON 복사 완료 (${payload.plateaus.length}개 좌표)`, false);
+  } catch (err) {
+    setStatus('JSON 복사 실패: ' + err.message, true);
   }
 });
 
