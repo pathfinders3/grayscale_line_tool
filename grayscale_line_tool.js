@@ -9,6 +9,7 @@ const lineCountInput = document.getElementById('lineCountInput');
 const statusEl = document.getElementById('status');
 const peakValuesPanelEl = document.getElementById('peakValuesPanel');
 const peakSidesPanelEl = document.getElementById('peakSidesPanel');
+const peakMarkerPanelEl = document.getElementById('peakMarkerPanel');
 const originalHoverInfoEl = document.getElementById('originalHoverInfo');
 const graphHoverInfoEl = document.getElementById('graphHoverInfo');
 const peakModeSelect = document.getElementById('peakModeSelect');
@@ -45,6 +46,10 @@ let hoverGuideState = {
   sampleIndex: -1,
   canvasX: 0,
   locked: false
+};
+let graphMarkerState = {
+  type: null,
+  values: []
 };
 let originalGuideLineY = null;
 let originalGuideLineX = null;
@@ -452,6 +457,26 @@ function getPlateauRangeForSampleIndex(sampleIndex, values, options = {}) {
   };
 }
 
+function getHillRangeForSampleIndex(sampleIndex, values, options = {}) {
+  if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(values) || values.length === 0) return null;
+
+  const thresholdRatio = getPeakThresholdRatio(options);
+  const maxValue = Math.max(...values);
+  const threshold = maxValue * thresholdRatio;
+  if (values[sampleIndex] < threshold) return null;
+
+  let left = sampleIndex;
+  while (left > 0 && values[left - 1] >= threshold) left -= 1;
+
+  let right = sampleIndex;
+  while (right < values.length - 1 && values[right + 1] >= threshold) right += 1;
+
+  return {
+    hillStart: left,
+    hillEnd: right
+  };
+}
+
 function getPeakStatusForSampleIndex(sampleIndex, lines) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines) || lines.length === 0) {
     return 'n/a';
@@ -464,8 +489,148 @@ function getPeakStatusForSampleIndex(sampleIndex, lines) {
     const peakIndices = findPeaks(line.values, analysisOptions);
     const isPeak = peakIndices.includes(sampleIndex);
     const plateauRange = getPlateauRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
+    const hillRange = getHillRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
     const plateauText = plateauRange ? `[${plateauRange.plateauStart}]~[${plateauRange.plateauEnd}]` : 'none';
-    const hillText = plateauRange ? `[${plateauRange.hillStart}]~[${plateauRange.hillEnd}]` : 'none';
+    const hillText = hillRange ? `[${hillRange.hillStart}]~[${hillRange.hillEnd}]` : 'none';
+
+    const peakSides = analyzePeakSides(line.values, peakIndices, analysisOptions);
+    const currentPeakSide = peakSides.find((item) => item.peakIndex === sampleIndex) || null;
+    const reboundText = currentPeakSide
+      ? `[${currentPeakSide.leftReboundIndex >= 0 ? currentPeakSide.leftReboundIndex : 'x'}]~[${currentPeakSide.rightReboundIndex >= 0 ? currentPeakSide.rightReboundIndex : 'x'}]`
+      : 'none';
+
+    statusParts.push(`${line.label}:isPeak=${isPeak ? 'yes' : 'no'}, plateau=${plateauText}, hill=${hillText}, rebound=${reboundText}`);
+  }
+
+  return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
+}
+
+function getCurrentPeakReferenceRanges() {
+  const lines = getActiveLinesFromGraphState();
+  if (!Array.isArray(lines) || lines.length === 0) return [];
+  if (!Number.isInteger(hoverGuideState.sampleIndex) || hoverGuideState.sampleIndex < 0) return [];
+
+  const result = [];
+  for (const line of lines) {
+    const values = Array.isArray(line.values) ? line.values : [];
+    if (values.length === 0) continue;
+
+    const peakIndices = findPeaks(values, analysisOptions);
+    if (peakIndices.length === 0) continue;
+
+    const nearestPeak = peakIndices.reduce((best, candidate) => {
+      return Math.abs(candidate - hoverGuideState.sampleIndex) < Math.abs(best - hoverGuideState.sampleIndex) ? candidate : best;
+    }, peakIndices[0]);
+
+    const plateauRange = getPlateauRangeForSampleIndex(nearestPeak, values, analysisOptions);
+    const hillRange = getHillRangeForSampleIndex(nearestPeak, values, analysisOptions);
+    const peakSide = analyzePeakSides(values, [nearestPeak], analysisOptions)[0] || {
+      leftReboundIndex: -1,
+      rightReboundIndex: -1
+    };
+
+    result.push({
+      label: line.label,
+      plateau: plateauRange ? [plateauRange.plateauStart, plateauRange.plateauEnd] : [nearestPeak, nearestPeak],
+      hill: hillRange ? [hillRange.hillStart, hillRange.hillEnd] : [nearestPeak, nearestPeak],
+      rebound: [peakSide.leftReboundIndex >= 0 ? peakSide.leftReboundIndex : 'x', peakSide.rightReboundIndex >= 0 ? peakSide.rightReboundIndex : 'x']
+    });
+  }
+
+  return result;
+}
+
+function renderPeakMarkerButtons() {
+  if (!peakMarkerPanelEl) return;
+
+  const references = getCurrentPeakReferenceRanges();
+  peakMarkerPanelEl.innerHTML = '';
+
+  if (references.length === 0) {
+    peakMarkerPanelEl.textContent = '가이드 위치를 선택해 주세요';
+    return;
+  }
+
+  const defaultRef = references[0];
+  const groups = [
+    { type: 'plateau', label: 'plateau', color: '#f5a8d9', values: defaultRef.plateau },
+    { type: 'hill', label: 'hill', color: '#8cc8ff', values: defaultRef.hill },
+    { type: 'rebound', label: 'rebound', color: '#6fe39e', values: defaultRef.rebound }
+  ];
+
+  for (const group of groups) {
+    const btn = document.createElement('button');
+    const displayValues = Array.isArray(group.values) ? group.values : [];
+    const rangeText = displayValues.length > 0
+      ? displayValues.map((v) => v === 'x' ? '[x]' : `[${Number(v)}]`).join(' ~ ')
+      : '[x]';
+    btn.type = 'button';
+    btn.textContent = `${group.label}: ${rangeText}`;
+    btn.style.background = '#1f1f1f';
+    btn.style.borderColor = group.color;
+    btn.style.color = '#f0f0f0';
+    btn.style.margin = '4px 4px 0 0';
+    btn.style.padding = '4px 8px';
+    btn.style.cursor = 'pointer';
+    btn.addEventListener('click', () => {
+      const pointValues = group.values
+        .filter((v) => v !== 'x' && Number.isInteger(Number(v)))
+        .map((v) => Number(v));
+      graphMarkerState = {
+        type: group.type,
+        values: pointValues
+      };
+      renderCurrentGraphWithHoverGuide();
+    });
+    peakMarkerPanelEl.appendChild(btn);
+  }
+}
+
+function getMarkerColor(type) {
+  if (type === 'plateau') return '#f5a8d9';
+  if (type === 'hill') return '#8cc8ff';
+  if (type === 'rebound') return '#6fe39e';
+  return '#ffffff';
+}
+
+function drawMarkerPointsForGraph(ctx, canvas, values, yMin, yMax) {
+  if (!graphMarkerState || !graphMarkerState.type || !Array.isArray(graphMarkerState.values) || graphMarkerState.values.length === 0) return;
+
+  const left = 30, right = canvas.width - 10, top = 10, bottom = canvas.height - 30;
+  const w = right - left, h = bottom - top;
+  const range = (yMax - yMin) || 1;
+  const color = getMarkerColor(graphMarkerState.type);
+  const sampleCount = values.length;
+
+  ctx.save();
+  ctx.fillStyle = color;
+  for (const sampleIndex of graphMarkerState.values) {
+    if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || sampleIndex >= sampleCount) continue;
+    const x = left + (sampleIndex / Math.max(1, sampleCount - 1)) * w;
+    const norm = (values[sampleIndex] - yMin) / range;
+    const y = bottom - norm * h;
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function getPeakStatusForSampleIndex(sampleIndex, lines) {
+  if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines) || lines.length === 0) {
+    return 'n/a';
+  }
+
+  const statusParts = [];
+  for (const line of lines) {
+    if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
+
+    const peakIndices = findPeaks(line.values, analysisOptions);
+    const isPeak = peakIndices.includes(sampleIndex);
+    const plateauRange = getPlateauRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
+    const hillRange = getHillRangeForSampleIndex(sampleIndex, line.values, analysisOptions);
+    const plateauText = plateauRange ? `[${plateauRange.plateauStart}]~[${plateauRange.plateauEnd}]` : 'none';
+    const hillText = hillRange ? `[${hillRange.hillStart}]~[${hillRange.hillEnd}]` : 'none';
 
     const peakSides = analyzePeakSides(line.values, peakIndices, analysisOptions);
     const currentPeakSide = peakSides.find((item) => item.peakIndex === sampleIndex) || null;
@@ -638,6 +803,8 @@ function updatePeakPanelsFromCurrentGraphState() {
   if (!lines || lines.length === 0) {
     setPanelText(peakValuesPanelEl, '데이터 없음');
     setPanelText(peakSidesPanelEl, '데이터 없음');
+    if (peakMarkerPanelEl) peakMarkerPanelEl.textContent = '가이드 위치를 선택해 주세요';
+    graphMarkerState = { type: null, values: [] };
     return;
   }
 
@@ -655,9 +822,7 @@ function updatePeakPanelsFromCurrentGraphState() {
 
   setPanelText(peakValuesPanelEl, formatPeakValuesForDisplay(analyzed));
   setPanelText(peakSidesPanelEl, formatPeakSidesForDisplay(analyzed));
-}
-
-function formatThresholdSummaryForDisplay(lines) {
+  renderPeakMarkerButtons();
   if (!Array.isArray(lines) || lines.length === 0) return 'threshold: 없음';
 
   const parts = [];
@@ -952,6 +1117,8 @@ window.addEventListener('keydown', (event) => {
         originalGuideLineX = null;
         redrawOriginalCanvas();
       }
+      graphMarkerState = { type: null, values: [] };
+      renderPeakMarkerButtons();
     }
     return;
   }
@@ -1162,6 +1329,7 @@ function drawSingleGrayscaleGraph(canvas, snapshot) {
   drawAxes(ctx, canvas);
   drawThresholdReferenceLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#7ef3ff', 'th');
   plotLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#4da6ff');
+  drawMarkerPointsForGraph(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax);
 }
 
 function drawCumulatedGrayscaleGraph(canvas, snapshot, selectedLine = selectedCumulateLine) {
@@ -1186,6 +1354,11 @@ function drawCumulatedGrayscaleGraph(canvas, snapshot, selectedLine = selectedCu
       drawThresholdReferenceLine(ctx, canvas, line.values, snapshot.yMin, snapshot.yMax, line.color || '#4da6ff', line.label || 'th');
       plotLine(ctx, canvas, line.values, snapshot.yMin, snapshot.yMax, line.color || '#4da6ff');
     }
+  }
+
+  if (linesToDraw.length > 0) {
+    const anchorValues = Array.isArray(linesToDraw[0].values) ? linesToDraw[0].values : [];
+    drawMarkerPointsForGraph(ctx, canvas, anchorValues, snapshot.yMin, snapshot.yMax);
   }
 }
 
@@ -1333,6 +1506,10 @@ document.getElementById('peakSidesToggle').addEventListener('click', () => {
   togglePeakPanel('peakSidesPanel', 'peakSidesToggle');
 });
 
+document.getElementById('peakMarkerToggle').addEventListener('click', () => {
+  togglePeakPanel('peakMarkerPanel', 'peakMarkerToggle');
+});
+
 graphCanvas.addEventListener('mousemove', (event) => {
   updateGraphHoverInfo(event);
 });
@@ -1368,6 +1545,7 @@ graphCanvas.addEventListener('click', (event) => {
   hoverGuideState.sampleIndex = sampleIndex;
   hoverGuideState.canvasX = left + (sampleIndex / Math.max(1, sampleCount - 1)) * (right - left);
   hoverGuideState.locked = true;
+  renderPeakMarkerButtons();
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
   showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
@@ -1380,6 +1558,7 @@ graphCanvas.addEventListener('keydown', (event) => {
 
   const delta = event.key === 'ArrowRight' ? 1 : -1;
   stepGraphGuideBy(delta);
+  renderPeakMarkerButtons();
 });
 
 graphCanvas.addEventListener('mouseleave', () => {
