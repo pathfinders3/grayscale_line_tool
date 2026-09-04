@@ -915,6 +915,13 @@ function createDefaultSelection(width, height) {
   };
 }
 
+function syncCumulateLineCountFromSelection() {
+  if (!lineCountInput || !selection) return;
+  const height = Math.max(0, selection.yBottom - selection.yTop + 1);
+  const safeHeight = Math.max(1, height);
+  lineCountInput.value = String(safeHeight);
+}
+
 function loadImageIntoCanvases(bitmap) {
   // Rebuild the pure source canvas at native image resolution.
   sourceCanvas = document.createElement('canvas');
@@ -939,6 +946,7 @@ function loadImageIntoCanvases(bitmap) {
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   yInput.value = midY;
+  syncCumulateLineCountFromSelection();
   redrawOriginalCanvas();
 
   try {
@@ -1026,6 +1034,7 @@ function moveSelectionBy(dx, dy) {
 
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   yInput.value = midY;
+  syncCumulateLineCountFromSelection();
   redrawOriginalCanvas();
 
   if (currentSnapshot && currentSnapshot.type === 'grayscale-line') {
@@ -1100,6 +1109,7 @@ window.addEventListener('mouseup', () => {
   if (selection) {
     const midY = Math.round((selection.yTop + selection.yBottom) / 2);
     yInput.value = midY;
+    syncCumulateLineCountFromSelection();
     setStatus(`선택 영역: X[${selection.xMin}, ${selection.xMax}], Y 중앙=${midY}`);
   }
 });
