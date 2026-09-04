@@ -89,8 +89,14 @@
 
 <div class="controls">
   <label>Y: <input type="number" id="yInput" min="0" value="0"></label>
+  <label>Sample mode:
+    <select id="sampleModeSelect">
+      <option value="64" selected>64개 샘플</option>
+      <option value="all">모든 좌표</option>
+    </select>
+  </label>
   <label>cumulate line count: <input type="number" id="lineCountInput" min="1" value="10"></label>
-  <button id="btnGrayscale">to 64 grayscale</button>
+  <button id="btnGrayscale">to grayscale</button>
   <button id="btnCumulate">to cumulate</button>
   <button id="btnPasteJson">Paste Gray JSON</button>
 </div>

@@ -15,6 +15,7 @@ const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
 const reboundModeSelect = document.getElementById('reboundModeSelect');
 const reboundDeltaInput = document.getElementById('reboundDeltaInput');
+const sampleModeSelect = document.getElementById('sampleModeSelect');
 
 // ---------- State ----------
 // sourceCanvas holds the PURE, untouched pixel data of the pasted image.
@@ -78,6 +79,12 @@ function getAnalysisOptionsFromInputs() {
     reboundMode,
     reboundDelta
   };
+}
+
+function getSamplingMode() {
+  return sampleModeSelect && (sampleModeSelect.value === 'all' || sampleModeSelect.value === '64')
+    ? sampleModeSelect.value
+    : '64';
 }
 
 function syncAnalysisOptionsFromInputs() {
@@ -924,11 +931,9 @@ window.addEventListener('keydown', (event) => {
 });
 
 // ---------- Sampling ----------
-// Reads 64 grayscale samples along row `fixedY`.
-// Sampling strategy chosen: EVEN SPACING across [xMin, xMax] (not 64
-// raw consecutive pixels), so the graph always spans the full selected
-// (or full-image) X range regardless of how many pixels wide it is.
-function getGrayscaleSamplesFromFixedY(ctx, xMin, xMax, fixedY, canvasWidth, canvasHeight) {
+// sample mode: '64' uses evenly spaced 64 points across the selected X range,
+// while 'all' samples every actual pixel coordinate in the selected range.
+function getGrayscaleSamplesFromFixedY(ctx, xMin, xMax, fixedY, canvasWidth, canvasHeight, mode = getSamplingMode()) {
   if (!ctx) throw new Error('소스 캔버스가 없습니다.');
   const y = Math.max(0, Math.min(canvasHeight - 1, Math.round(fixedY)));
   let x0 = Math.max(0, Math.min(canvasWidth - 1, Math.round(xMin)));
@@ -936,9 +941,16 @@ function getGrayscaleSamplesFromFixedY(ctx, xMin, xMax, fixedY, canvasWidth, can
   if (x1 < x0) { const t = x0; x0 = x1; x1 = t; }
   const span = Math.max(1, x1 - x0);
   const values = [];
-  for (let i = 0; i < 64; i++) {
-    const t = i / 63;
-    const x = Math.max(0, Math.min(canvasWidth - 1, Math.round(x0 + t * span)));
+  const sampleCount = mode === 'all' ? Math.max(1, span + 1) : 64;
+
+  for (let i = 0; i < sampleCount; i++) {
+    let x;
+    if (mode === 'all') {
+      x = Math.max(0, Math.min(canvasWidth - 1, x0 + i));
+    } else {
+      const t = sampleCount > 1 ? i / (sampleCount - 1) : 0;
+      x = Math.max(0, Math.min(canvasWidth - 1, Math.round(x0 + t * span)));
+    }
     const pixel = ctx.getImageData(x, y, 1, 1).data;
     const gray = Math.round(0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2]);
     values.push(gray);
@@ -1193,13 +1205,15 @@ document.getElementById('btnGrayscale').addEventListener('click', () => {
     if (isNaN(fixedY) || fixedY < 0) { setStatus('Y 값을 확인해 주세요 (0 이상의 숫자).', true); return; }
     const xMin = selection ? selection.xMin : 0;
     const xMax = selection ? selection.xMax : sourceCanvas.width - 1;
-    const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, fixedY, sourceCanvas.width, sourceCanvas.height);
+    const mode = getSamplingMode();
+    const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, fixedY, sourceCanvas.width, sourceCanvas.height, mode);
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
     selectedCumulateLine = 'all';
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
     showTemporaryOriginalGuideLine(fixedY, 15000);
     updatePeakPanelsFromCurrentGraphState();
-    setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], 64개 샘플 | ${getPeakValueSummaryForCurrentGraph()}`);
+    const sampleLabel = mode === 'all' ? '모든 좌표' : '64개 샘플';
+    setStatus(`grayscale 완료: Y=${fixedY}, X[${xMin}, ${xMax}], ${sampleLabel} | ${getPeakValueSummaryForCurrentGraph()}`);
     console.log('grayscale snapshot', currentSnapshot);
   } catch (err) {
     setStatus('오류: ' + err.message, true);
@@ -1328,6 +1342,22 @@ if (reboundModeSelect) {
 if (reboundDeltaInput) {
   reboundDeltaInput.addEventListener('change', () => {
     updatePeakPanelsFromCurrentGraphState();
+  });
+}
+
+if (sampleModeSelect) {
+  sampleModeSelect.addEventListener('change', () => {
+    if (!hasImage || !sourceCanvas) return;
+    const fixedY = parseInt(yInput.value, 10);
+    if (Number.isNaN(fixedY) || fixedY < 0) return;
+    const xMin = selection ? selection.xMin : 0;
+    const xMax = selection ? selection.xMax : sourceCanvas.width - 1;
+    const mode = getSamplingMode();
+    const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, fixedY, sourceCanvas.width, sourceCanvas.height, mode);
+    currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
+    drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    updatePeakPanelsFromCurrentGraphState();
+    setStatus(`샘플 모드 변경: ${mode === 'all' ? '모든 좌표' : '64개 샘플'} (Y=${fixedY})`);
   });
 }
 
