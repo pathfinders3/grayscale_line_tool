@@ -1021,6 +1021,33 @@ function plotLine(ctx, canvas, values, yMin, yMax, color) {
   ctx.restore();
 }
 
+function drawThresholdReferenceLine(ctx, canvas, values, yMin, yMax, color, label) {
+  if (!Array.isArray(values) || values.length === 0) return;
+
+  const left = 30, right = canvas.width - 10, top = 10, bottom = canvas.height - 30;
+  const h = bottom - top;
+  const range = (yMax - yMin) || 1;
+  const maxValue = Math.max(...values);
+  const thresholdValue = maxValue * getPeakThresholdRatio(analysisOptions);
+  const thresholdNorm = (thresholdValue - yMin) / range;
+  const thresholdY = bottom - thresholdNorm * h;
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(left, thresholdY);
+  ctx.lineTo(right, thresholdY);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = color;
+  ctx.font = '11px sans-serif';
+  ctx.fillText(`${label || 'th'}=${thresholdValue.toFixed(1)}`, right - 60, Math.max(top + 12, thresholdY - 6));
+  ctx.restore();
+}
+
 function renderCumulateSelector(snapshot) {
   const container = document.getElementById('cumulateOptions');
   if (!container) return;
@@ -1096,6 +1123,7 @@ function drawSingleGrayscaleGraph(canvas, snapshot) {
     return;
   }
   drawAxes(ctx, canvas);
+  drawThresholdReferenceLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#7ef3ff', 'th');
   plotLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#4da6ff');
 }
 
@@ -1118,6 +1146,7 @@ function drawCumulatedGrayscaleGraph(canvas, snapshot, selectedLine = selectedCu
 
   for (const line of linesToDraw) {
     if (Array.isArray(line.values) && line.values.length > 0) {
+      drawThresholdReferenceLine(ctx, canvas, line.values, snapshot.yMin, snapshot.yMax, line.color || '#4da6ff', line.label || 'th');
       plotLine(ctx, canvas, line.values, snapshot.yMin, snapshot.yMax, line.color || '#4da6ff');
     }
   }
