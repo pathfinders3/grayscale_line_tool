@@ -48,6 +48,7 @@ let originalGuideLineY = null;
 let originalGuideLineX = null;
 let originalGuideLineYTimer = null;
 let originalGuideLineXTimer = null;
+const STORAGE_KEY = 'grayscale-line-tool:image';
 
 function parseNonNegativeInt(value, fallback) {
   const n = Number.parseInt(value, 10);
@@ -600,6 +601,41 @@ function setStatus(msg, isError) {
   statusEl.classList.toggle('error', !!isError);
 }
 
+function saveCurrentImageToStorage() {
+  if (!sourceCanvas || !window.localStorage) return;
+
+  try {
+    const dataUrl = sourceCanvas.toDataURL('image/png');
+    window.localStorage.setItem(STORAGE_KEY, dataUrl);
+  } catch (err) {
+    console.warn('저장된 이미지 저장 실패:', err);
+  }
+}
+
+async function restoreSavedImageFromStorage() {
+  if (!window.localStorage) return false;
+
+  try {
+    const savedDataUrl = window.localStorage.getItem(STORAGE_KEY);
+    if (!savedDataUrl) return false;
+
+    const img = new Image();
+    img.onload = () => {
+      loadImageIntoCanvases(img);
+      setStatus('저장된 이미지가 불러와졌습니다. 새 이미지를 붙여넣으면 이 이미지를 덮어쓸 수 있습니다.');
+    };
+    img.onerror = () => {
+      window.localStorage.removeItem(STORAGE_KEY);
+      setStatus('저장된 이미지가 손상되어 삭제되었습니다. 새 이미지를 붙여넣어 주세요.', true);
+    };
+    img.src = savedDataUrl;
+    return true;
+  } catch (err) {
+    console.warn('저장된 이미지 복원 실패:', err);
+    return false;
+  }
+}
+
 // ---------- Paste image handling ----------
 document.addEventListener('paste', async (e) => {
   const items = e.clipboardData && e.clipboardData.items;
@@ -667,9 +703,11 @@ function loadImageIntoCanvases(bitmap) {
     currentSnapshot = buildGrayscaleSnapshot(midY, selection.xMin, selection.xMax, values);
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
     updatePeakPanelsFromCurrentGraphState();
+    saveCurrentImageToStorage();
     setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역이 자동 적용되었습니다. 드래그로 직접 영역을 바꿀 수 있습니다.`);
   } catch (err) {
     updatePeakPanelsFromCurrentGraphState();
+    saveCurrentImageToStorage();
     setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역을 적용했지만 그래프 생성 중 오류가 발생했습니다: ${err.message}`, true);
   }
 }
@@ -1234,3 +1272,4 @@ if (reboundDeltaInput) {
 updatePeakPanelsFromCurrentGraphState();
 setOriginalHoverInfo('original cursor: x=-, y=-');
 setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
+restoreSavedImageFromStorage();
