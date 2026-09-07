@@ -986,10 +986,8 @@ function redrawOriginalCanvas() {
     originalCtx.save();
     originalCtx.strokeStyle = 'rgba(255,0,0,0.9)';
     originalCtx.lineWidth = 1;
-    originalCtx.fillStyle = 'rgba(255,0,0,0.15)';
     const w = selection.xMax - selection.xMin;
     const h = selection.yBottom - selection.yTop;
-    originalCtx.fillRect(selection.xMin, selection.yTop, w, h);
     originalCtx.strokeRect(selection.xMin, selection.yTop, w, h);
     originalCtx.restore();
   }
