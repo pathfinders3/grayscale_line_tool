@@ -1320,17 +1320,6 @@ function drawPlateauPointsOnCanvas(targetCanvas, payload) {
     ctx.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
   }
 
-  if (selection) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 0, 0, 0.95)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([7, 5]);
-    const w = selection.xMax - selection.xMin;
-    const h = selection.yBottom - selection.yTop;
-    ctx.strokeRect(selection.xMin, selection.yTop, w, h);
-    ctx.restore();
-  }
-
   for (const lineEntry of payload.lines) {
     const points = Array.isArray(lineEntry.plateauPoints) ? lineEntry.plateauPoints : [];
     if (points.length === 0) continue;
