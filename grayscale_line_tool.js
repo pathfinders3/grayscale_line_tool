@@ -1238,9 +1238,11 @@ function buildSelectedPlateauJsonPayload() {
   const xMax = Math.max(0, Math.min(sourceCanvas.width - 1, selection.xMax));
   const yTop = Math.max(0, Math.min(sourceCanvas.height - 1, selection.yTop));
   const yBottom = Math.max(0, Math.min(sourceCanvas.height - 1, selection.yBottom));
+  const scanYTop = yTop + 1;
+  const scanYBottom = yBottom - 1;
   let lineCounter = 1;
 
-  for (let y = yTop; y <= yBottom; y++) {
+  for (let y = scanYTop; y <= scanYBottom; y++) {
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, y, sourceCanvas.width, sourceCanvas.height, 'all');
     if (values.length === 0) continue;
 
