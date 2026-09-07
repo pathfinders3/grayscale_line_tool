@@ -1321,6 +1321,108 @@ function drawPlateauPointsOnCanvas(targetCanvas, payload) {
   }
 }
 
+function buildSelectedHillJsonPayload() {
+  if (!hasImage || !selection || !sourceCtx || !sourceCanvas) {
+    return { source: null, lines: [], totalHillPoints: 0 };
+  }
+
+  const payload = {
+    source: {
+      xMin: selection.xMin,
+      xMax: selection.xMax,
+      yTop: selection.yTop,
+      yBottom: selection.yBottom
+    },
+    lines: [],
+    totalHillPoints: 0
+  };
+
+  const xMin = Math.max(0, Math.min(sourceCanvas.width - 1, selection.xMin));
+  const xMax = Math.max(0, Math.min(sourceCanvas.width - 1, selection.xMax));
+  const yTop = Math.max(0, Math.min(sourceCanvas.height - 1, selection.yTop));
+  const yBottom = Math.max(0, Math.min(sourceCanvas.height - 1, selection.yBottom));
+  const scanYTop = yTop + 1;
+  const scanYBottom = yBottom - 1;
+  let lineCounter = 1;
+
+  for (let y = scanYTop; y <= scanYBottom; y++) {
+    const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, y, sourceCanvas.width, sourceCanvas.height, 'all');
+    if (values.length === 0) continue;
+
+    const peakIndices = findPeaks(values, analysisOptions);
+    if (peakIndices.length === 0) continue;
+
+    const lineEntry = {
+      lineLabel: `Ln${lineCounter}`,
+      lineIndex: lineCounter - 1,
+      y,
+      hillPoints: []
+    };
+    const seenKeys = new Set();
+
+    for (const peakIndex of peakIndices) {
+      const hillRange = getHillRangeForSampleIndex(peakIndex, values, analysisOptions);
+      if (!hillRange) continue;
+
+      for (let i = hillRange.hillStart; i <= hillRange.hillEnd; i++) {
+        const originalX = xMin + i;
+        if (originalX < xMin || originalX > xMax) continue;
+
+        const uniqueKey = `${y}:${i}`;
+        if (seenKeys.has(uniqueKey)) continue;
+        seenKeys.add(uniqueKey);
+
+        lineEntry.hillPoints.push({
+          x: originalX,
+          y,
+          value: values[i],
+          sampleIndex: i,
+          peakIndex,
+          rangeStart: hillRange.hillStart,
+          rangeEnd: hillRange.hillEnd
+        });
+      }
+    }
+
+    if (lineEntry.hillPoints.length > 0) {
+      payload.totalHillPoints += lineEntry.hillPoints.length;
+      payload.lines.push(lineEntry);
+    }
+
+    lineCounter += 1;
+  }
+
+  return payload;
+}
+
+function drawHillPointsOnCanvas(targetCanvas, payload) {
+  if (!targetCanvas || !payload || !Array.isArray(payload.lines) || payload.lines.length === 0) return;
+
+  const ctx = targetCanvas.getContext('2d');
+  ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+
+  if (sourceCanvas) {
+    ctx.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
+  }
+
+  for (const lineEntry of payload.lines) {
+    const points = Array.isArray(lineEntry.hillPoints) ? lineEntry.hillPoints : [];
+    if (points.length === 0) continue;
+
+    ctx.save();
+    ctx.fillStyle = '#8cc8ff';
+
+    for (const point of points) {
+      const x = Number(point.x);
+      const y = Number(point.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+    }
+
+    ctx.restore();
+  }
+}
+
 // ---------- Rendering ----------
 function drawAxes(ctx, canvas) {
   ctx.save();
@@ -1691,6 +1793,51 @@ document.getElementById('btnExportPng').addEventListener('click', async () => {
     setStatus(`plateau PNG 생성 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
   } catch (err) {
     setStatus('PNG 복사 실패: ' + err.message, true);
+  }
+});
+
+document.getElementById('btnExportHillPng').addEventListener('click', async () => {
+  try {
+    if (!hasImage || !selection) {
+      setStatus('먼저 선택 영역을 지정한 뒤 다시 시도해 주세요.', true);
+      return;
+    }
+
+    const payload = buildSelectedHillJsonPayload();
+    const totalCount = Number.isInteger(payload.totalHillPoints) ? payload.totalHillPoints : 0;
+    if (!Array.isArray(payload.lines) || payload.lines.length === 0 || totalCount === 0) {
+      setStatus('선택 영역 안에 hill 좌표가 없습니다.', true);
+      return;
+    }
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = sourceCanvas ? sourceCanvas.width : graphCanvas.width;
+    exportCanvas.height = sourceCanvas ? sourceCanvas.height : graphCanvas.height;
+
+    drawHillPointsOnCanvas(exportCanvas, payload);
+
+    const blob = await new Promise((resolve, reject) => {
+      exportCanvas.toBlob((b) => {
+        if (b) resolve(b);
+        else reject(new Error('PNG 생성 실패'));
+      }, 'image/png');
+    });
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      setStatus(`hill PNG 복사 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`);
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = exportCanvas.toDataURL('image/png');
+    link.download = 'hill_points.png';
+    link.click();
+    setStatus(`hill PNG 생성 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
+  } catch (err) {
+    setStatus('hill PNG 복사 실패: ' + err.message, true);
   }
 });
 
