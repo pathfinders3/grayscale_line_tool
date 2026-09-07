@@ -1312,6 +1312,50 @@ function buildSelectedPlateauJsonPayload() {
   return payload;
 }
 
+function drawPlateauPointsOnCanvas(targetCanvas, payload) {
+  if (!targetCanvas || !payload || !Array.isArray(payload.lines) || payload.lines.length === 0) return;
+
+  const ctx = targetCanvas.getContext('2d');
+  ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+
+  if (sourceCanvas) {
+    ctx.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
+  }
+
+  if (selection) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 0, 0, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 5]);
+    const w = selection.xMax - selection.xMin;
+    const h = selection.yBottom - selection.yTop;
+    ctx.strokeRect(selection.xMin, selection.yTop, w, h);
+    ctx.restore();
+  }
+
+  for (const lineEntry of payload.lines) {
+    const points = Array.isArray(lineEntry.plateauPoints) ? lineEntry.plateauPoints : [];
+    if (points.length === 0) continue;
+
+    ctx.save();
+    ctx.fillStyle = '#f5a8d9';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 1;
+
+    for (const point of points) {
+      const x = Number(point.x);
+      const y = Number(point.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+}
+
 // ---------- Rendering ----------
 function drawAxes(ctx, canvas) {
   ctx.save();
@@ -1637,6 +1681,51 @@ document.getElementById('btnExportJson').addEventListener('click', async () => {
     setStatus(`plateau JSON 복사 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
   } catch (err) {
     setStatus('JSON 복사 실패: ' + err.message, true);
+  }
+});
+
+document.getElementById('btnExportPng').addEventListener('click', async () => {
+  try {
+    if (!hasImage || !selection) {
+      setStatus('먼저 선택 영역을 지정한 뒤 다시 시도해 주세요.', true);
+      return;
+    }
+
+    const payload = buildSelectedPlateauJsonPayload();
+    const totalCount = Number.isInteger(payload.totalPlateauPoints) ? payload.totalPlateauPoints : 0;
+    if (!Array.isArray(payload.lines) || payload.lines.length === 0 || totalCount === 0) {
+      setStatus('선택 영역 안에 plateau 좌표가 없습니다.', true);
+      return;
+    }
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = sourceCanvas ? sourceCanvas.width : graphCanvas.width;
+    exportCanvas.height = sourceCanvas ? sourceCanvas.height : graphCanvas.height;
+
+    drawPlateauPointsOnCanvas(exportCanvas, payload);
+
+    const blob = await new Promise((resolve, reject) => {
+      exportCanvas.toBlob((b) => {
+        if (b) resolve(b);
+        else reject(new Error('PNG 생성 실패'));
+      }, 'image/png');
+    });
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      setStatus(`plateau PNG 복사 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`);
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = exportCanvas.toDataURL('image/png');
+    link.download = 'plateau_points.png';
+    link.click();
+    setStatus(`plateau PNG 생성 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
+  } catch (err) {
+    setStatus('PNG 복사 실패: ' + err.message, true);
   }
 });
 
