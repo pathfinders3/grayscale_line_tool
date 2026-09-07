@@ -1325,8 +1325,8 @@ function drawPlateauPointsOnCanvas(targetCanvas, payload) {
     if (points.length === 0) continue;
 
     ctx.save();
-    ctx.fillStyle = '#f5a8d9';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillStyle = '#ff2b2b';
+    ctx.strokeStyle = '#8b0000';
     ctx.lineWidth = 1;
 
     for (const point of points) {
