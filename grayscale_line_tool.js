@@ -285,7 +285,12 @@ function getActiveLinesFromGraphState() {
 
   if (currentSnapshot.type === 'grayscale-line') {
     if (!Array.isArray(currentSnapshot.values) || currentSnapshot.values.length === 0) return [];
-    return [{ label: 'Ln1', values: currentSnapshot.values }];
+    return [{
+      label: 'Ln1',
+      values: currentSnapshot.values,
+      y: Number.isInteger(currentSnapshot.fixedY) ? currentSnapshot.fixedY : null,
+      lineIndex: 0
+    }];
   }
 
   if (currentSnapshot.type === 'cumulate-lines') {
@@ -294,14 +299,21 @@ function getActiveLinesFromGraphState() {
     if (selectedCumulateLine === 'all') {
       return currentSnapshot.lines.map((line, index) => ({
         label: `Ln${index + 1}`,
-        values: Array.isArray(line.values) ? line.values : []
+        values: Array.isArray(line.values) ? line.values : [],
+        y: Number.isInteger(line.y) ? line.y : null,
+        lineIndex: index
       }));
     }
 
     const target = Number(selectedCumulateLine);
     if (!Number.isInteger(target) || target < 0 || target >= currentSnapshot.lines.length) return [];
     const line = currentSnapshot.lines[target];
-    return [{ label: `Ln${target + 1}`, values: Array.isArray(line.values) ? line.values : [] }];
+    return [{
+      label: `Ln${target + 1}`,
+      values: Array.isArray(line.values) ? line.values : [],
+      y: Number.isInteger(line.y) ? line.y : null,
+      lineIndex: target
+    }];
   }
 
   return [];
@@ -1210,7 +1222,7 @@ function colorForIndex(i, total) {
 
 function buildSelectedPlateauJsonPayload() {
   if (!hasImage || !selection) {
-    return { source: null, plateaus: [] };
+    return { source: null, lines: [], totalPlateauPoints: 0 };
   }
 
   const lines = getActiveLinesFromGraphState();
@@ -1222,7 +1234,8 @@ function buildSelectedPlateauJsonPayload() {
         yTop: selection.yTop,
         yBottom: selection.yBottom
       },
-      plateaus: []
+      lines: [],
+      totalPlateauPoints: 0
     };
   }
 
@@ -1233,9 +1246,9 @@ function buildSelectedPlateauJsonPayload() {
       yTop: selection.yTop,
       yBottom: selection.yBottom
     },
-    plateaus: []
+    lines: [],
+    totalPlateauPoints: 0
   };
-  const seenKeys = new Set();
 
   for (const line of lines) {
     const values = Array.isArray(line.values) ? line.values : [];
@@ -1244,14 +1257,24 @@ function buildSelectedPlateauJsonPayload() {
     const peakIndices = findPeaks(values, analysisOptions);
     if (peakIndices.length === 0) continue;
 
-    const baseY = Number.isInteger(currentSnapshot && currentSnapshot.fixedY)
-      ? currentSnapshot.fixedY
-      : (currentSnapshot && Array.isArray(currentSnapshot.lines))
-        ? currentSnapshot.lines.find((entry, index) => {
-            if (selectedCumulateLine === 'all') return true;
-            return String(index) === String(selectedCumulateLine);
-          })?.y ?? Math.round((selection.yTop + selection.yBottom) / 2)
-        : Math.round((selection.yTop + selection.yBottom) / 2);
+    const lineEntry = {
+      lineLabel: line.label || 'line',
+      lineIndex: Number.isInteger(line.lineIndex) ? line.lineIndex : null,
+      y: Number.isInteger(line.y) ? line.y : null,
+      plateauPoints: []
+    };
+    const seenKeys = new Set();
+
+    const pointY = Number.isInteger(line && line.y)
+      ? line.y
+      : Number.isInteger(currentSnapshot && currentSnapshot.fixedY)
+        ? currentSnapshot.fixedY
+        : (currentSnapshot && Array.isArray(currentSnapshot.lines))
+          ? currentSnapshot.lines.find((entry, index) => {
+              if (selectedCumulateLine === 'all') return true;
+              return String(index) === String(selectedCumulateLine);
+            })?.y ?? Math.round((selection.yTop + selection.yBottom) / 2)
+          : Math.round((selection.yTop + selection.yBottom) / 2);
 
     for (const peakIndex of peakIndices) {
       const plateauRange = getPlateauRangeForSampleIndex(peakIndex, values, analysisOptions);
@@ -1268,17 +1291,21 @@ function buildSelectedPlateauJsonPayload() {
         if (seenKeys.has(uniqueKey)) continue;
         seenKeys.add(uniqueKey);
 
-        payload.plateaus.push({
+        lineEntry.plateauPoints.push({
           x: originalX,
-          y: baseY,
+          y: pointY,
           value: values[i],
           sampleIndex: i,
           peakIndex,
           rangeStart: plateauRange.plateauStart,
-          rangeEnd: plateauRange.plateauEnd,
-          lineLabel: line.label || 'line'
+          rangeEnd: plateauRange.plateauEnd
         });
       }
+    }
+
+    if (lineEntry.plateauPoints.length > 0) {
+      payload.totalPlateauPoints += lineEntry.plateauPoints.length;
+      payload.lines.push(lineEntry);
     }
   }
 
@@ -1584,7 +1611,8 @@ document.getElementById('btnExportJson').addEventListener('click', async () => {
     }
 
     const payload = buildSelectedPlateauJsonPayload();
-    if (!Array.isArray(payload.plateaus) || payload.plateaus.length === 0) {
+    const totalCount = Number.isInteger(payload.totalPlateauPoints) ? payload.totalPlateauPoints : 0;
+    if (!Array.isArray(payload.lines) || payload.lines.length === 0 || totalCount === 0) {
       setStatus('선택 영역 안에 plateau 좌표가 없습니다.', true);
       return;
     }
@@ -1593,7 +1621,7 @@ document.getElementById('btnExportJson').addEventListener('click', async () => {
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(jsonText);
-      setStatus(`plateau JSON 복사 완료 (${payload.plateaus.length}개 좌표)`);
+      setStatus(`plateau JSON 복사 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`);
       return;
     }
 
@@ -1606,7 +1634,7 @@ document.getElementById('btnExportJson').addEventListener('click', async () => {
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
-    setStatus(`plateau JSON 복사 완료 (${payload.plateaus.length}개 좌표)`, false);
+    setStatus(`plateau JSON 복사 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
   } catch (err) {
     setStatus('JSON 복사 실패: ' + err.message, true);
   }
