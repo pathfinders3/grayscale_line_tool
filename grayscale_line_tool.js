@@ -1307,17 +1307,12 @@ function drawPlateauPointsOnCanvas(targetCanvas, payload) {
 
     ctx.save();
     ctx.fillStyle = '#ff2b2b';
-    ctx.strokeStyle = '#8b0000';
-    ctx.lineWidth = 1;
 
     for (const point of points) {
       const x = Number(point.x);
       const y = Number(point.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
     }
 
     ctx.restore();
