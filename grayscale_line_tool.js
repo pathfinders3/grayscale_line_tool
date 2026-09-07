@@ -1219,22 +1219,8 @@ function colorForIndex(i, total) {
 }
 
 function buildSelectedPlateauJsonPayload() {
-  if (!hasImage || !selection) {
+  if (!hasImage || !selection || !sourceCtx || !sourceCanvas) {
     return { source: null, lines: [], totalPlateauPoints: 0 };
-  }
-
-  const lines = getActiveLinesFromGraphState();
-  if (!Array.isArray(lines) || lines.length === 0) {
-    return {
-      source: {
-        xMin: selection.xMin,
-        xMax: selection.xMax,
-        yTop: selection.yTop,
-        yBottom: selection.yBottom
-      },
-      lines: [],
-      totalPlateauPoints: 0
-    };
   }
 
   const payload = {
@@ -1248,50 +1234,43 @@ function buildSelectedPlateauJsonPayload() {
     totalPlateauPoints: 0
   };
 
-  for (const line of lines) {
-    const values = Array.isArray(line.values) ? line.values : [];
+  const xMin = Math.max(0, Math.min(sourceCanvas.width - 1, selection.xMin));
+  const xMax = Math.max(0, Math.min(sourceCanvas.width - 1, selection.xMax));
+  const yTop = Math.max(0, Math.min(sourceCanvas.height - 1, selection.yTop));
+  const yBottom = Math.max(0, Math.min(sourceCanvas.height - 1, selection.yBottom));
+  let lineCounter = 1;
+
+  for (let y = yTop; y <= yBottom; y++) {
+    const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, y, sourceCanvas.width, sourceCanvas.height, 'all');
     if (values.length === 0) continue;
 
     const peakIndices = findPeaks(values, analysisOptions);
     if (peakIndices.length === 0) continue;
 
     const lineEntry = {
-      lineLabel: line.label || 'line',
-      lineIndex: Number.isInteger(line.lineIndex) ? line.lineIndex : null,
-      y: Number.isInteger(line.y) ? line.y : null,
+      lineLabel: `Ln${lineCounter}`,
+      lineIndex: lineCounter - 1,
+      y,
       plateauPoints: []
     };
     const seenKeys = new Set();
-
-    const pointY = Number.isInteger(line && line.y)
-      ? line.y
-      : Number.isInteger(currentSnapshot && currentSnapshot.fixedY)
-        ? currentSnapshot.fixedY
-        : (currentSnapshot && Array.isArray(currentSnapshot.lines))
-          ? currentSnapshot.lines.find((entry, index) => {
-              if (selectedCumulateLine === 'all') return true;
-              return String(index) === String(selectedCumulateLine);
-            })?.y ?? Math.round((selection.yTop + selection.yBottom) / 2)
-          : Math.round((selection.yTop + selection.yBottom) / 2);
 
     for (const peakIndex of peakIndices) {
       const plateauRange = getPlateauRangeForSampleIndex(peakIndex, values, analysisOptions);
       if (!plateauRange) continue;
 
       for (let i = plateauRange.plateauStart; i <= plateauRange.plateauEnd; i++) {
-        const originalX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
-          ? getOriginalXFromGraphSampleIndex(i, values.length, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
-          : Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((i / Math.max(1, values.length - 1)) * (sourceCanvas.width - 1))));
+        const originalX = xMin + i;
 
-        if (originalX === null || originalX < selection.xMin || originalX > selection.xMax) continue;
+        if (originalX < xMin || originalX > xMax) continue;
 
-        const uniqueKey = `${line.label || 'line'}:${i}`;
+        const uniqueKey = `${y}:${i}`;
         if (seenKeys.has(uniqueKey)) continue;
         seenKeys.add(uniqueKey);
 
         lineEntry.plateauPoints.push({
           x: originalX,
-          y: pointY,
+          y,
           value: values[i],
           sampleIndex: i,
           peakIndex,
@@ -1305,6 +1284,8 @@ function buildSelectedPlateauJsonPayload() {
       payload.totalPlateauPoints += lineEntry.plateauPoints.length;
       payload.lines.push(lineEntry);
     }
+
+    lineCounter += 1;
   }
 
   return payload;
