@@ -60,6 +60,7 @@ let originalGuideLineX = null;
 let originalGuideLineYTimer = null;
 let originalGuideLineXTimer = null;
 const STORAGE_KEY = 'grayscale-line-tool:image';
+const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
 function parseNonNegativeInt(value, fallback) {
   const n = Number.parseInt(value, 10);
@@ -107,6 +108,34 @@ function getSamplingMode() {
     : '64';
 }
 
+function saveThresholdRatioToStorage() {
+  if (!window.localStorage) return;
+
+  try {
+    window.localStorage.setItem(THRESHOLD_STORAGE_KEY, String(analysisOptions.peakThresholdRatio));
+  } catch (err) {
+    console.warn('threshold 저장 실패:', err);
+  }
+}
+
+function restoreThresholdRatioFromStorage() {
+  if (!window.localStorage || !peakThresholdRatioInput) return false;
+
+  try {
+    const rawValue = window.localStorage.getItem(THRESHOLD_STORAGE_KEY);
+    if (rawValue === null) return false;
+
+    const restoredValue = parsePeakThresholdRatio(rawValue, 0.75);
+    peakThresholdRatioInput.value = String(restoredValue);
+    analysisOptions.peakThresholdRatio = restoredValue;
+    hasUserEditedThresholdRatio = true;
+    return true;
+  } catch (err) {
+    console.warn('threshold 복원 실패:', err);
+    return false;
+  }
+}
+
 function syncAnalysisOptionsFromInputs() {
   analysisOptions = getAnalysisOptionsFromInputs();
   if (reboundDeltaInput) {
@@ -114,6 +143,9 @@ function syncAnalysisOptionsFromInputs() {
   }
   if (peakThresholdRatioInput && !Number.isFinite(Number(peakThresholdRatioInput.value))) {
     peakThresholdRatioInput.value = String(analysisOptions.peakThresholdRatio);
+  }
+  if (window.localStorage && peakThresholdRatioInput) {
+    saveThresholdRatioToStorage();
   }
   updateThresholdValuePreview();
 }
@@ -1153,7 +1185,9 @@ function loadImageIntoCanvases(bitmap) {
 
   try {
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
-    hasUserEditedThresholdRatio = false;
+    if (!restoreThresholdRatioFromStorage()) {
+      hasUserEditedThresholdRatio = false;
+    }
     currentSnapshot = buildGrayscaleSnapshot(midY, selection.xMin, selection.xMax, values);
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
     syncThresholdRatioInputFromCurrentGraph();
@@ -2225,7 +2259,9 @@ if (sampleModeSelect) {
     const xMax = selection ? selection.xMax : sourceCanvas.width - 1;
     const mode = getSamplingMode();
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, fixedY, sourceCanvas.width, sourceCanvas.height, mode);
-    hasUserEditedThresholdRatio = false;
+    if (!restoreThresholdRatioFromStorage()) {
+      hasUserEditedThresholdRatio = false;
+    }
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
     syncThresholdRatioInputFromCurrentGraph();
