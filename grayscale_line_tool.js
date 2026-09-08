@@ -1587,13 +1587,13 @@ function buildSelectedHillJsonPayload() {
   return payload;
 }
 
-function drawHillPointsOnCanvas(targetCanvas, payload) {
+function drawHillPointsOnCanvas(targetCanvas, payload, includeSourceImage = true) {
   if (!targetCanvas || !payload || !Array.isArray(payload.lines) || payload.lines.length === 0) return;
 
   const ctx = targetCanvas.getContext('2d');
   ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
 
-  if (sourceCanvas) {
+  if (includeSourceImage && sourceCanvas) {
     ctx.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
   }
 
@@ -2008,7 +2008,7 @@ document.getElementById('btnExportHillPng').addEventListener('click', async () =
     exportCanvas.width = sourceCanvas ? sourceCanvas.width : graphCanvas.width;
     exportCanvas.height = sourceCanvas ? sourceCanvas.height : graphCanvas.height;
 
-    drawHillPointsOnCanvas(exportCanvas, payload);
+    drawHillPointsOnCanvas(exportCanvas, payload, true);
 
     const blob = await new Promise((resolve, reject) => {
       exportCanvas.toBlob((b) => {
@@ -2032,6 +2032,51 @@ document.getElementById('btnExportHillPng').addEventListener('click', async () =
     setStatus(`hill PNG 생성 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
   } catch (err) {
     setStatus('hill PNG 복사 실패: ' + err.message, true);
+  }
+});
+
+document.getElementById('btnExportHillOnlyPng').addEventListener('click', async () => {
+  try {
+    if (!hasImage || !selection) {
+      setStatus('먼저 선택 영역을 지정한 뒤 다시 시도해 주세요.', true);
+      return;
+    }
+
+    const payload = buildSelectedHillJsonPayload();
+    const totalCount = Number.isInteger(payload.totalHillPoints) ? payload.totalHillPoints : 0;
+    if (!Array.isArray(payload.lines) || payload.lines.length === 0 || totalCount === 0) {
+      setStatus('선택 영역 안에 hill 좌표가 없습니다.', true);
+      return;
+    }
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = sourceCanvas ? sourceCanvas.width : graphCanvas.width;
+    exportCanvas.height = sourceCanvas ? sourceCanvas.height : graphCanvas.height;
+
+    drawHillPointsOnCanvas(exportCanvas, payload, false);
+
+    const blob = await new Promise((resolve, reject) => {
+      exportCanvas.toBlob((b) => {
+        if (b) resolve(b);
+        else reject(new Error('PNG 생성 실패'));
+      }, 'image/png');
+    });
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      setStatus(`hill only PNG 복사 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`);
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = exportCanvas.toDataURL('image/png');
+    link.download = 'hill_only.png';
+    link.click();
+    setStatus(`hill only PNG 생성 완료 (${totalCount}개 좌표, ${payload.lines.length}개 라인)`, false);
+  } catch (err) {
+    setStatus('hill only PNG 복사 실패: ' + err.message, true);
   }
 });
 
