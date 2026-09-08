@@ -14,6 +14,7 @@ const originalHoverInfoEl = document.getElementById('originalHoverInfo');
 const graphHoverInfoEl = document.getElementById('graphHoverInfo');
 const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
+const peakThresholdRatioInput = document.getElementById('peakThresholdRatioInput');
 const reboundModeSelect = document.getElementById('reboundModeSelect');
 const reboundDeltaInput = document.getElementById('reboundDeltaInput');
 const sampleModeSelect = document.getElementById('sampleModeSelect');
@@ -41,6 +42,7 @@ let analysisOptions = {
   reboundDelta: 1,
   peakThresholdRatio: 0.75
 };
+let hasUserEditedThresholdRatio = false;
 let hoverGuideState = {
   active: false,
   sampleIndex: -1,
@@ -70,6 +72,12 @@ function parsePositiveInt(value, fallback) {
   return n;
 }
 
+function parsePeakThresholdRatio(value, fallback = 0.75) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || n >= 1) return fallback;
+  return n;
+}
+
 function getAnalysisOptionsFromInputs() {
   const peakMode = peakModeSelect && (peakModeSelect.value === 'plateau' || peakModeSelect.value === 'strict')
     ? peakModeSelect.value
@@ -79,10 +87,14 @@ function getAnalysisOptionsFromInputs() {
     : 'first-rise';
   const plateauTolerance = plateauToleranceInput ? parseNonNegativeInt(plateauToleranceInput.value, 0) : 0;
   const reboundDelta = reboundDeltaInput ? parsePositiveInt(reboundDeltaInput.value, 1) : 1;
+  const peakThresholdRatio = peakThresholdRatioInput
+    ? parsePeakThresholdRatio(peakThresholdRatioInput.value, 0.75)
+    : 0.75;
 
   return {
     peakMode,
     plateauTolerance,
+    peakThresholdRatio,
     reboundMode,
     reboundDelta
   };
@@ -99,6 +111,17 @@ function syncAnalysisOptionsFromInputs() {
   if (reboundDeltaInput) {
     reboundDeltaInput.disabled = analysisOptions.reboundMode !== 'delta-rise';
   }
+  if (peakThresholdRatioInput && !Number.isFinite(Number(peakThresholdRatioInput.value))) {
+    peakThresholdRatioInput.value = String(analysisOptions.peakThresholdRatio);
+  }
+}
+
+function syncThresholdRatioInputFromCurrentGraph() {
+  if (!peakThresholdRatioInput) return;
+  if (hasUserEditedThresholdRatio) return;
+
+  const ratioValue = getPeakThresholdRatio(analysisOptions);
+  peakThresholdRatioInput.value = String(parsePeakThresholdRatio(ratioValue, 0.75));
 }
 
 function setPanelText(el, text) {
@@ -1093,8 +1116,10 @@ function loadImageIntoCanvases(bitmap) {
 
   try {
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
+    hasUserEditedThresholdRatio = false;
     currentSnapshot = buildGrayscaleSnapshot(midY, selection.xMin, selection.xMax, values);
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    syncThresholdRatioInputFromCurrentGraph();
     updatePeakPanelsFromCurrentGraphState();
     saveCurrentImageToStorage();
     setStatus(`이미지 로드 완료 (${bitmap.width} x ${bitmap.height}). 기본 선택 영역이 자동 적용되었습니다. 드래그로 직접 영역을 바꿀 수 있습니다.`);
@@ -2083,6 +2108,20 @@ if (plateauToleranceInput) {
   });
 }
 
+if (peakThresholdRatioInput) {
+  peakThresholdRatioInput.addEventListener('input', () => {
+    hasUserEditedThresholdRatio = true;
+    syncAnalysisOptionsFromInputs();
+    updatePeakPanelsFromCurrentGraphState();
+  });
+
+  peakThresholdRatioInput.addEventListener('change', () => {
+    hasUserEditedThresholdRatio = true;
+    syncAnalysisOptionsFromInputs();
+    updatePeakPanelsFromCurrentGraphState();
+  });
+}
+
 if (reboundModeSelect) {
   reboundModeSelect.addEventListener('change', () => {
     updatePeakPanelsFromCurrentGraphState();
@@ -2104,13 +2143,16 @@ if (sampleModeSelect) {
     const xMax = selection ? selection.xMax : sourceCanvas.width - 1;
     const mode = getSamplingMode();
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, xMin, xMax, fixedY, sourceCanvas.width, sourceCanvas.height, mode);
+    hasUserEditedThresholdRatio = false;
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    syncThresholdRatioInputFromCurrentGraph();
     updatePeakPanelsFromCurrentGraphState();
     setStatus(`샘플 모드 변경: ${mode === 'all' ? '모든 좌표' : '64개 샘플'} (Y=${fixedY})`);
   });
 }
 
+syncThresholdRatioInputFromCurrentGraph();
 updatePeakPanelsFromCurrentGraphState();
 setOriginalHoverInfo('original cursor: x=-, y=-');
 setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
