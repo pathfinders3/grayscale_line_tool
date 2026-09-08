@@ -15,6 +15,7 @@ const graphHoverInfoEl = document.getElementById('graphHoverInfo');
 const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
 const peakThresholdRatioInput = document.getElementById('peakThresholdRatioInput');
+const peakThresholdValueInput = document.getElementById('peakThresholdValueInput');
 const reboundModeSelect = document.getElementById('reboundModeSelect');
 const reboundDeltaInput = document.getElementById('reboundDeltaInput');
 const sampleModeSelect = document.getElementById('sampleModeSelect');
@@ -114,6 +115,41 @@ function syncAnalysisOptionsFromInputs() {
   if (peakThresholdRatioInput && !Number.isFinite(Number(peakThresholdRatioInput.value))) {
     peakThresholdRatioInput.value = String(analysisOptions.peakThresholdRatio);
   }
+  updateThresholdValuePreview();
+}
+
+function getThresholdBrightnessValuesForCurrentGraph() {
+  const lines = getActiveLinesFromGraphState();
+  if (!Array.isArray(lines) || lines.length === 0) return [];
+
+  const values = [];
+  for (const line of lines) {
+    const lineValues = Array.isArray(line.values) ? line.values : [];
+    if (lineValues.length === 0) continue;
+    const maxValue = Math.max(...lineValues);
+    values.push(maxValue * getPeakThresholdRatio(analysisOptions));
+  }
+
+  return values;
+}
+
+function updateThresholdValuePreview() {
+  if (!peakThresholdValueInput) return;
+
+  const thresholdValues = getThresholdBrightnessValuesForCurrentGraph();
+  if (thresholdValues.length === 0) {
+    peakThresholdValueInput.value = '-';
+    return;
+  }
+
+  const roundedValues = thresholdValues.map((value) => Number(value.toFixed(1)));
+  const uniqueValues = [...new Set(roundedValues)];
+  if (uniqueValues.length === 1) {
+    peakThresholdValueInput.value = String(uniqueValues[0]);
+    return;
+  }
+
+  peakThresholdValueInput.value = `multiple(${uniqueValues.length})`;
 }
 
 function syncThresholdRatioInputFromCurrentGraph() {
@@ -987,6 +1023,7 @@ function updatePeakPanelsFromCurrentGraphState() {
 
   setPanelText(peakValuesPanelEl, formatPeakValuesForDisplay(analyzed));
   setPanelText(peakSidesPanelEl, formatPeakSidesForDisplay(analyzed));
+  updateThresholdValuePreview();
   renderPeakMarkerButtons();
   if (!Array.isArray(lines) || lines.length === 0) return 'threshold: 없음';
 
