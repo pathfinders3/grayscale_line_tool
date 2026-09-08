@@ -192,6 +192,17 @@ function syncThresholdRatioInputFromCurrentGraph() {
   peakThresholdRatioInput.value = String(parsePeakThresholdRatio(ratioValue, 0.75));
 }
 
+function initializeThresholdFromStorage() {
+  const restored = restoreThresholdRatioFromStorage();
+  if (!restored) {
+    hasUserEditedThresholdRatio = false;
+    if (peakThresholdRatioInput) {
+      peakThresholdRatioInput.value = String(parsePeakThresholdRatio(analysisOptions.peakThresholdRatio ?? 0.75, 0.75));
+    }
+    analysisOptions.peakThresholdRatio = parsePeakThresholdRatio(analysisOptions.peakThresholdRatio ?? 0.75, 0.75);
+  }
+}
+
 function setPanelText(el, text) {
   if (!el) return;
   el.textContent = text || '데이터 없음';
@@ -2270,7 +2281,9 @@ if (sampleModeSelect) {
   });
 }
 
+initializeThresholdFromStorage();
 syncThresholdRatioInputFromCurrentGraph();
+updateThresholdValuePreview();
 updatePeakPanelsFromCurrentGraphState();
 setOriginalHoverInfo('original cursor: x=-, y=-');
 setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
