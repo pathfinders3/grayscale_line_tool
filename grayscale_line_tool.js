@@ -400,6 +400,66 @@ function setGraphHoverInfo(text) {
   graphHoverInfoEl.textContent = text;
 }
 
+function setBrightnessCheckInfo(text) {
+  const el = document.getElementById('brightnessCheckInfo');
+  if (!el) return;
+  el.textContent = text || '밝기 체크: 선택 영역을 지정한 뒤 버튼을 눌러주세요.';
+}
+
+function getSelectedBrightnessRange() {
+  if (!hasImage || !sourceCanvas || !sourceCtx) {
+    throw new Error('먼저 이미지를 붙여넣어 주세요.');
+  }
+
+  const xMin = Number.isFinite(selection && selection.xMin) ? selection.xMin : 0;
+  const xMax = Number.isFinite(selection && selection.xMax) ? selection.xMax : sourceCanvas.width - 1;
+  const yTop = Number.isFinite(selection && selection.yTop) ? selection.yTop : 0;
+  const yBottom = Number.isFinite(selection && selection.yBottom) ? selection.yBottom : sourceCanvas.height - 1;
+
+  const startX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.min(xMin, xMax)));
+  const endX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.max(xMin, xMax)));
+  const startY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.min(yTop, yBottom)));
+  const endY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.max(yTop, yBottom)));
+
+  const width = endX - startX + 1;
+  const height = endY - startY + 1;
+
+  if (width <= 0 || height <= 0) {
+    throw new Error('선택 영역이 비어 있습니다.');
+  }
+
+  const imageData = sourceCtx.getImageData(startX, startY, width, height).data;
+  let min = 255;
+  let max = 0;
+  let count = 0;
+
+  for (let i = 0; i < imageData.length; i += 4) {
+    const r = imageData[i];
+    const g = imageData[i + 1];
+    const b = imageData[i + 2];
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    if (gray < min) min = gray;
+    if (gray > max) max = gray;
+    count += 1;
+  }
+
+  if (count === 0) {
+    throw new Error('선택 영역 안에 측정 가능한 픽셀이 없습니다.');
+  }
+
+  return {
+    xMin: startX,
+    xMax: endX,
+    yTop: startY,
+    yBottom: endY,
+    width,
+    height,
+    min,
+    max,
+    count
+  };
+}
+
 function setOriginalHoverInfo(text) {
   if (!originalHoverInfoEl) return;
   originalHoverInfoEl.textContent = text;
@@ -1847,6 +1907,20 @@ document.getElementById('btnPasteJson').addEventListener('click', async () => {
     restoreGraphFromJson(text);
   } catch (err) {
     setStatus('클립보드를 읽을 수 없습니다: ' + err.message, true);
+  }
+});
+
+document.getElementById('btnBrightnessCheck').addEventListener('click', () => {
+  try {
+    const result = getSelectedBrightnessRange();
+    const areaText = `X[${result.xMin}, ${result.xMax}] / Y[${result.yTop}, ${result.yBottom}]`;
+    const displayText = `밝기 체크: 선택 영역 ${areaText} | 최저 ${result.min} / 최고 ${result.max} (0~255, 픽셀 ${result.count}개)`;
+    setBrightnessCheckInfo(displayText);
+    setStatus(displayText);
+    console.log('brightness range check', result);
+  } catch (err) {
+    setBrightnessCheckInfo('밝기 체크: ' + err.message);
+    setStatus(err.message, true);
   }
 });
 
