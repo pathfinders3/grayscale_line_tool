@@ -362,14 +362,17 @@ function getGraphGuideValueSummary(sampleIndex, lines = getActiveLinesFromGraphS
 
   const uniqueValues = [...new Set(values.map((v) => Number(v)))];
   if (uniqueValues.length === 1) return `value ${uniqueValues[0]}`;
-  return 'value multiple';
+  return `value multiple(${uniqueValues.length})`;
 }
 
 function formatGraphValueSummary(summary) {
   if (!summary) return '';
-  if (summary === 'value multiple') return '밝기: 여러 값';
+  if (summary === 'value multiple') return '밝기: multiple';
   const match = /^value\s+(.*)$/.exec(summary);
-  return match ? `밝기: ${match[1]}` : `밝기: ${summary}`;
+  if (!match) return `밝기: ${summary}`;
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? `밝기: ${value}` : `밝기: ${match[1]}`;
 }
 
 function drawGraphHoverGuide() {
@@ -742,6 +745,35 @@ function getPeakStatusForSampleIndex(sampleIndex, lines) {
   return statusParts.length > 0 ? statusParts.join(', ') : 'n/a';
 }
 
+function getCurrentGraphGuideY() {
+  if (!currentSnapshot || typeof currentSnapshot !== 'object') return null;
+
+  if (currentSnapshot.type === 'grayscale-line') {
+    return Number.isFinite(currentSnapshot.fixedY) ? currentSnapshot.fixedY : null;
+  }
+
+  if (currentSnapshot.type === 'cumulate-lines') {
+    if (!Array.isArray(currentSnapshot.lines) || currentSnapshot.lines.length === 0) {
+      return Number.isFinite(currentSnapshot.fixedY) ? currentSnapshot.fixedY : null;
+    }
+
+    if (selectedCumulateLine === 'all') {
+      const firstLine = currentSnapshot.lines[0];
+      return firstLine && Number.isFinite(firstLine.y) ? firstLine.y : (Number.isFinite(currentSnapshot.fixedY) ? currentSnapshot.fixedY : null);
+    }
+
+    const index = Number(selectedCumulateLine);
+    if (Number.isInteger(index) && index >= 0 && index < currentSnapshot.lines.length) {
+      const line = currentSnapshot.lines[index];
+      return line && Number.isFinite(line.y) ? line.y : (Number.isFinite(currentSnapshot.fixedY) ? currentSnapshot.fixedY : null);
+    }
+
+    return Number.isFinite(currentSnapshot.fixedY) ? currentSnapshot.fixedY : null;
+  }
+
+  return null;
+}
+
 function paintGraphGuideAtSampleIndex(sampleIndex) {
   const lines = getActiveLinesFromGraphState();
   if (!lines || lines.length === 0) return;
@@ -773,6 +805,11 @@ function paintGraphGuideAtSampleIndex(sampleIndex) {
   const peakText = getPeakStatusForSampleIndex(clampedIndex, lines);
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX ?? clampedIndex}, y=-, sampleIndex=${clampedIndex}, color=${colorText}, ${peakText}`);
+
+  const guideY = getCurrentGraphGuideY();
+  if (Number.isFinite(guideY)) {
+    showTemporaryOriginalGuideLine(guideY, 15000);
+  }
   if (typeof mappedX === 'number') {
     showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
   }
@@ -2004,6 +2041,11 @@ graphCanvas.addEventListener('click', (event) => {
   renderPeakMarkerButtons();
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
+
+  const guideY = getCurrentGraphGuideY();
+  if (Number.isFinite(guideY)) {
+    showTemporaryOriginalGuideLine(guideY, 15000);
+  }
   showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
   graphCanvas.focus();
 });
