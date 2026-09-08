@@ -526,6 +526,16 @@ function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
   }, durationMs);
 }
 
+function showOriginalGuidesForCurrentGraph(mappedX, durationMs = 15000) {
+  const guideY = getCurrentGraphGuideY();
+  if (Number.isFinite(guideY)) {
+    showTemporaryOriginalGuideLine(guideY, durationMs);
+  }
+  if (typeof mappedX === 'number') {
+    showTemporaryOriginalVerticalGuideLine(mappedX, durationMs);
+  }
+}
+
 function getPlateauRangeForSampleIndex(sampleIndex, values, options = {}) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(values) || values.length === 0) {
     return null;
@@ -806,13 +816,7 @@ function paintGraphGuideAtSampleIndex(sampleIndex) {
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX ?? clampedIndex}, y=-, sampleIndex=${clampedIndex}, color=${colorText}, ${peakText}`);
 
-  const guideY = getCurrentGraphGuideY();
-  if (Number.isFinite(guideY)) {
-    showTemporaryOriginalGuideLine(guideY, 15000);
-  }
-  if (typeof mappedX === 'number') {
-    showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
-  }
+  showOriginalGuidesForCurrentGraph(mappedX, 15000);
 }
 
 function updateGraphHoverInfo(evt) {
@@ -1800,6 +1804,7 @@ document.getElementById('btnGrayscale').addEventListener('click', () => {
     currentSnapshot = buildGrayscaleSnapshot(fixedY, xMin, xMax, values);
     selectedCumulateLine = 'all';
     drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+    showOriginalGuidesForCurrentGraph(null, 15000);
     showTemporaryOriginalGuideLine(fixedY, 15000);
     updatePeakPanelsFromCurrentGraphState();
     const sampleLabel = mode === 'all' ? '모든 좌표' : '64개 샘플';
@@ -1831,6 +1836,7 @@ document.getElementById('btnCumulate').addEventListener('click', () => {
     selectedCumulateLine = 'all';
     renderCumulateSelector(currentSnapshot);
     drawCumulatedGrayscaleGraph(graphCanvas, currentSnapshot, selectedCumulateLine);
+    showOriginalGuidesForCurrentGraph(null, 15000);
     showTemporaryOriginalGuideLine(lines[0].y, 15000);
     updatePeakPanelsFromCurrentGraphState();
     setStatus(`cumulate 완료: baseY=${baseY}, 라인 ${lines.length}개, X[${xMin}, ${xMax}] | ${getPeakValueSummaryForCurrentGraph()}`);
@@ -2042,11 +2048,7 @@ graphCanvas.addEventListener('click', (event) => {
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
 
-  const guideY = getCurrentGraphGuideY();
-  if (Number.isFinite(guideY)) {
-    showTemporaryOriginalGuideLine(guideY, 15000);
-  }
-  showTemporaryOriginalVerticalGuideLine(mappedX, 15000);
+  showOriginalGuidesForCurrentGraph(mappedX, 15000);
   graphCanvas.focus();
 });
 
