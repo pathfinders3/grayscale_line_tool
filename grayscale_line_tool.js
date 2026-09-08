@@ -45,7 +45,8 @@ let hoverGuideState = {
   active: false,
   sampleIndex: -1,
   canvasX: 0,
-  locked: false
+  locked: false,
+  valueSummary: null
 };
 let graphMarkerState = {
   type: null,
@@ -347,6 +348,30 @@ function getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, xMin, xMax) 
   return mappedX;
 }
 
+function getGraphGuideValueSummary(sampleIndex, lines = getActiveLinesFromGraphState()) {
+  if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines)) return null;
+
+  const values = [];
+  for (const line of lines) {
+    if (!Array.isArray(line.values) || sampleIndex >= line.values.length) continue;
+    const value = Number(line.values[sampleIndex]);
+    if (Number.isFinite(value)) values.push(value);
+  }
+
+  if (values.length === 0) return null;
+
+  const uniqueValues = [...new Set(values.map((v) => Number(v)))];
+  if (uniqueValues.length === 1) return `value ${uniqueValues[0]}`;
+  return 'value multiple';
+}
+
+function formatGraphValueSummary(summary) {
+  if (!summary) return '';
+  if (summary === 'value multiple') return '밝기: 여러 값';
+  const match = /^value\s+(.*)$/.exec(summary);
+  return match ? `밝기: ${match[1]}` : `밝기: ${summary}`;
+}
+
 function drawGraphHoverGuide() {
   if (!hoverGuideState.active) return;
 
@@ -367,7 +392,8 @@ function drawGraphHoverGuide() {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  const label = `idx ${hoverGuideState.sampleIndex}`;
+  const valueText = hoverGuideState.valueSummary ? formatGraphValueSummary(hoverGuideState.valueSummary) : '';
+  const label = valueText ? `idx ${hoverGuideState.sampleIndex} / ${valueText}` : `idx ${hoverGuideState.sampleIndex}`;
   ctx.font = '11px sans-serif';
   const textWidth = ctx.measureText(label).width;
   const boxX = Math.max(left, Math.min(right - textWidth - 10, x + 5));
@@ -730,6 +756,7 @@ function paintGraphGuideAtSampleIndex(sampleIndex) {
   hoverGuideState.active = true;
   hoverGuideState.sampleIndex = clampedIndex;
   hoverGuideState.canvasX = sampleX;
+  hoverGuideState.valueSummary = getGraphGuideValueSummary(clampedIndex, lines);
 
   const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
     ? getOriginalXFromGraphSampleIndex(clampedIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
@@ -758,6 +785,7 @@ function updateGraphHoverInfo(evt) {
     if (lines && lines.length > 0 && Number.isInteger(hoverGuideState.sampleIndex) && hoverGuideState.sampleIndex >= 0) {
       const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
       if (sampleCount > 0) {
+        hoverGuideState.valueSummary = getGraphGuideValueSummary(hoverGuideState.sampleIndex, lines);
         const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
           ? getOriginalXFromGraphSampleIndex(hoverGuideState.sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
           : null;
@@ -805,6 +833,7 @@ function updateGraphHoverInfo(evt) {
   hoverGuideState.active = true;
   hoverGuideState.sampleIndex = sampleIndex;
   hoverGuideState.canvasX = sampleX;
+  hoverGuideState.valueSummary = getGraphGuideValueSummary(sampleIndex, lines);
 
   const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
     ? getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
@@ -1971,6 +2000,7 @@ graphCanvas.addEventListener('click', (event) => {
   hoverGuideState.sampleIndex = sampleIndex;
   hoverGuideState.canvasX = left + (sampleIndex / Math.max(1, sampleCount - 1)) * (right - left);
   hoverGuideState.locked = true;
+  hoverGuideState.valueSummary = getGraphGuideValueSummary(sampleIndex, activeLines);
   renderPeakMarkerButtons();
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
