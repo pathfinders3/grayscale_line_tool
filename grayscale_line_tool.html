@@ -48,6 +48,10 @@
     <canvas id="originalCanvas" width="480" height="320"></canvas>
   </div>
   <div class="canvas-box">
+    <p>확대 이미지</p>
+    <canvas id="zoomCanvas" width="480" height="320"></canvas>
+  </div>
+  <div class="canvas-box">
     <p>Grayscale Line Graph</p>
     <canvas id="graphCanvas" width="480" height="320" tabindex="0"></canvas>
   </div>
@@ -99,6 +103,7 @@
 
 <div class="controls">
   <label>Y: <input type="number" id="yInput" min="0" value="0"></label>
+  <label>확대 배율 (2~20): <input type="number" id="zoomLevelInput" min="2" max="20" step="1" value="4"></label>
   <label>Sample mode:
     <select id="sampleModeSelect">
       <option value="64" selected>64개 샘플</option>

@@ -3,8 +3,11 @@
 // ---------- Element refs ----------
 const originalCanvas = document.getElementById('originalCanvas');
 const originalCtx = originalCanvas.getContext('2d');
+const zoomCanvas = document.getElementById('zoomCanvas');
+const zoomCtx = zoomCanvas ? zoomCanvas.getContext('2d') : null;
 const graphCanvas = document.getElementById('graphCanvas');
 const yInput = document.getElementById('yInput');
+const zoomLevelInput = document.getElementById('zoomLevelInput');
 const lineCountInput = document.getElementById('lineCountInput');
 const statusEl = document.getElementById('status');
 const peakValuesPanelEl = document.getElementById('peakValuesPanel');
@@ -59,6 +62,7 @@ let originalGuideLineY = null;
 let originalGuideLineX = null;
 let originalGuideLineYTimer = null;
 let originalGuideLineXTimer = null;
+let zoomFocusPoint = null;
 const STORAGE_KEY = 'grayscale-line-tool:image';
 const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
@@ -72,6 +76,12 @@ function parsePositiveInt(value, fallback) {
   const n = Number.parseInt(value, 10);
   if (Number.isNaN(n) || n < 1) return fallback;
   return n;
+}
+
+function parseZoomLevel(value, fallback = 4) {
+  const n = Number.parseInt(value, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(2, Math.min(20, n));
 }
 
 function parsePeakThresholdRatio(value, fallback = 0.75) {
@@ -206,6 +216,81 @@ function initializeThresholdFromStorage() {
 function setPanelText(el, text) {
   if (!el) return;
   el.textContent = text || '데이터 없음';
+}
+
+function getZoomLevel() {
+  if (!zoomLevelInput) return 4;
+  return parseZoomLevel(zoomLevelInput.value, 4);
+}
+
+function drawZoomCanvasAt(x, y) {
+  if (!zoomCanvas || !zoomCtx) return;
+
+  zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+
+  if (!hasImage || !sourceCanvas) {
+    zoomCtx.fillStyle = '#111';
+    zoomCtx.fillRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+    zoomCtx.fillStyle = '#888';
+    zoomCtx.font = '12px sans-serif';
+    zoomCtx.fillText('이미지를 붙여넣어 주세요', 12, 20);
+    return;
+  }
+
+  const zoomLevel = getZoomLevel();
+  const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
+  const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
+  zoomFocusPoint = { x: clampedX, y: clampedY };
+
+  const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
+  const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+
+  const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, clampedX - Math.floor(sampleWidth / 2)));
+  const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, clampedY - Math.floor(sampleHeight / 2)));
+
+  zoomCtx.imageSmoothingEnabled = false;
+  zoomCtx.drawImage(
+    sourceCanvas,
+    startX,
+    startY,
+    sampleWidth,
+    sampleHeight,
+    0,
+    0,
+    zoomCanvas.width,
+    zoomCanvas.height
+  );
+
+  zoomCtx.save();
+  zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  zoomCtx.lineWidth = 1;
+  zoomCtx.beginPath();
+  zoomCtx.moveTo(zoomCanvas.width / 2 + 0.5, 0);
+  zoomCtx.lineTo(zoomCanvas.width / 2 + 0.5, zoomCanvas.height);
+  zoomCtx.moveTo(0, zoomCanvas.height / 2 + 0.5);
+  zoomCtx.lineTo(zoomCanvas.width, zoomCanvas.height / 2 + 0.5);
+  zoomCtx.stroke();
+
+  zoomCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  zoomCtx.fillRect(6, 6, 140, 18);
+  zoomCtx.fillStyle = '#8cf7ff';
+  zoomCtx.font = '12px sans-serif';
+  zoomCtx.fillText(`x=${clampedX}, y=${clampedY}, ${zoomLevel}x`, 10, 19);
+  zoomCtx.restore();
+}
+
+function redrawZoomCanvas() {
+  if (!hasImage || !sourceCanvas) {
+    drawZoomCanvasAt(0, 0);
+    return;
+  }
+
+  if (zoomFocusPoint) {
+    drawZoomCanvasAt(zoomFocusPoint.x, zoomFocusPoint.y);
+    return;
+  }
+
+  drawZoomCanvasAt(Math.floor(sourceCanvas.width / 2), Math.floor(sourceCanvas.height / 2));
 }
 
 function togglePeakPanel(panelId, buttonId) {
@@ -1190,9 +1275,11 @@ function loadImageIntoCanvases(bitmap) {
   originalGuideLineX = null;
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
+  const midX = Math.round((selection.xMin + selection.xMax) / 2);
   yInput.value = midY;
   syncCumulateLineCountFromSelection();
   redrawOriginalCanvas();
+  drawZoomCanvasAt(midX, midY);
 
   try {
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
@@ -1283,6 +1370,7 @@ function moveSelectionBy(dx, dy) {
   yInput.value = midY;
   syncCumulateLineCountFromSelection();
   redrawOriginalCanvas();
+  redrawZoomCanvas();
 
   if (currentSnapshot && currentSnapshot.type === 'grayscale-line') {
     const values = getGrayscaleSamplesFromFixedY(sourceCtx, selection.xMin, selection.xMax, midY, sourceCanvas.width, sourceCanvas.height);
@@ -1319,14 +1407,15 @@ function getCanvasCoords(evt) {
   const scaleX = originalCanvas.width / rect.width;
   const scaleY = originalCanvas.height / rect.height;
   return {
-    x: Math.round((evt.clientX - rect.left) * scaleX),
-    y: Math.round((evt.clientY - rect.top) * scaleY)
+    x: Math.max(0, Math.min(originalCanvas.width - 1, Math.round((evt.clientX - rect.left) * scaleX))),
+    y: Math.max(0, Math.min(originalCanvas.height - 1, Math.round((evt.clientY - rect.top) * scaleY)))
   };
 }
 
 originalCanvas.addEventListener('mousedown', (e) => {
   if (!hasImage) return;
   const { x, y } = getCanvasCoords(e);
+  drawZoomCanvasAt(x, y);
   isDragging = true;
   dragStartX = x;
   dragStartY = y;
@@ -1337,6 +1426,9 @@ originalCanvas.addEventListener('mousedown', (e) => {
 originalCanvas.addEventListener('mousemove', (e) => {
   const { x, y } = getCanvasCoords(e);
   setOriginalHoverInfo(`original cursor: x=${x}, y=${y}`);
+  if (hasImage) {
+    drawZoomCanvasAt(x, y);
+  }
 
   if (!isDragging || !hasImage) return;
   selection.xMin = Math.max(0, Math.min(dragStartX, x));
@@ -1348,6 +1440,7 @@ originalCanvas.addEventListener('mousemove', (e) => {
 
 originalCanvas.addEventListener('mouseleave', () => {
   setOriginalHoverInfo('original cursor: x=-, y=-');
+  redrawZoomCanvas();
 });
 
 window.addEventListener('mouseup', () => {
@@ -2281,10 +2374,23 @@ if (sampleModeSelect) {
   });
 }
 
+if (zoomLevelInput) {
+  zoomLevelInput.addEventListener('input', () => {
+    zoomLevelInput.value = String(getZoomLevel());
+    redrawZoomCanvas();
+  });
+
+  zoomLevelInput.addEventListener('change', () => {
+    zoomLevelInput.value = String(getZoomLevel());
+    redrawZoomCanvas();
+  });
+}
+
 initializeThresholdFromStorage();
 syncThresholdRatioInputFromCurrentGraph();
 updateThresholdValuePreview();
 updatePeakPanelsFromCurrentGraphState();
 setOriginalHoverInfo('original cursor: x=-, y=-');
 setGraphHoverInfo('graph cursor: x=-, y=-, color=-');
+redrawZoomCanvas();
 restoreSavedImageFromStorage();
