@@ -63,6 +63,8 @@ let originalGuideLineX = null;
 let originalGuideLineYTimer = null;
 let originalGuideLineXTimer = null;
 let zoomFocusPoint = null;
+let zoomGuideLineX = null;
+let zoomGuideLineXTimer = null;
 const STORAGE_KEY = 'grayscale-line-tool:image';
 const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
@@ -260,6 +262,21 @@ function drawZoomCanvasAt(x, y) {
     zoomCanvas.width,
     zoomCanvas.height
   );
+
+  if (typeof zoomGuideLineX === 'number') {
+    const guideXRatio = sampleWidth > 1 ? (zoomGuideLineX - startX) / (sampleWidth - 1) : 0.5;
+    const guideCanvasX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round(guideXRatio * (zoomCanvas.width - 1))));
+
+    zoomCtx.save();
+    zoomCtx.setLineDash([5, 4]);
+    zoomCtx.strokeStyle = 'rgba(255, 108, 94, 0.95)';
+    zoomCtx.lineWidth = 1;
+    zoomCtx.beginPath();
+    zoomCtx.moveTo(guideCanvasX + 0.5, 0);
+    zoomCtx.lineTo(guideCanvasX + 0.5, zoomCanvas.height);
+    zoomCtx.stroke();
+    zoomCtx.restore();
+  }
 
   zoomCtx.save();
   zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
@@ -713,6 +730,22 @@ function showTemporaryOriginalVerticalGuideLine(x, durationMs = 15000) {
   }, durationMs);
 }
 
+function showTemporaryZoomVerticalGuideLine(x, durationMs = 15000) {
+  if (!hasImage || !sourceCanvas) return;
+  const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
+  zoomGuideLineX = clampedX;
+  if (zoomGuideLineXTimer) {
+    clearTimeout(zoomGuideLineXTimer);
+    zoomGuideLineXTimer = null;
+  }
+  redrawZoomCanvas();
+  zoomGuideLineXTimer = setTimeout(() => {
+    zoomGuideLineX = null;
+    zoomGuideLineXTimer = null;
+    redrawZoomCanvas();
+  }, durationMs);
+}
+
 function showOriginalGuidesForCurrentGraph(mappedX, durationMs = 15000) {
   const guideY = getCurrentGraphGuideY();
   if (Number.isFinite(guideY)) {
@@ -720,6 +753,7 @@ function showOriginalGuidesForCurrentGraph(mappedX, durationMs = 15000) {
   }
   if (typeof mappedX === 'number') {
     showTemporaryOriginalVerticalGuideLine(mappedX, durationMs);
+    showTemporaryZoomVerticalGuideLine(mappedX, durationMs);
   }
 }
 
@@ -1271,8 +1305,13 @@ function loadImageIntoCanvases(bitmap) {
     clearTimeout(originalGuideLineXTimer);
     originalGuideLineXTimer = null;
   }
+  if (zoomGuideLineXTimer) {
+    clearTimeout(zoomGuideLineXTimer);
+    zoomGuideLineXTimer = null;
+  }
   originalGuideLineY = null;
   originalGuideLineX = null;
+  zoomGuideLineX = null;
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   const midX = Math.round((selection.xMin + selection.xMax) / 2);
@@ -1466,6 +1505,10 @@ window.addEventListener('keydown', (event) => {
       if (originalGuideLineX !== null) {
         originalGuideLineX = null;
         redrawOriginalCanvas();
+      }
+      if (zoomGuideLineX !== null) {
+        zoomGuideLineX = null;
+        redrawZoomCanvas();
       }
       graphMarkerState = { type: null, values: [] };
       renderPeakMarkerButtons();
