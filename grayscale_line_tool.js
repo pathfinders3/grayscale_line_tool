@@ -309,12 +309,21 @@ function drawZoomCanvasAt(x, y) {
       const overlayY = ((rectTop - startY) / Math.max(1, sampleHeight)) * zoomCanvas.height;
       const overlayW = ((rectRight - rectLeft + 1) / Math.max(1, sampleWidth)) * zoomCanvas.width;
       const overlayH = ((rectBottom - rectTop + 1) / Math.max(1, sampleHeight)) * zoomCanvas.height;
+      const centerY = rectTop + (rectBottom - rectTop) / 2;
+      const centerYRatio = sampleHeight > 1 ? (centerY - startY) / (sampleHeight - 1) : 0.5;
+      const centerYCanvas = Math.max(0, Math.min(zoomCanvas.height - 1, Math.round(centerYRatio * (zoomCanvas.height - 1))));
 
       zoomCtx.save();
       zoomCtx.strokeStyle = 'rgba(255, 0, 0, 0.95)';
       zoomCtx.lineWidth = 2;
       zoomCtx.setLineDash([6, 3]);
       zoomCtx.strokeRect(overlayX + 0.5, overlayY + 0.5, overlayW, overlayH);
+      zoomCtx.setLineDash([4, 4]);
+      zoomCtx.lineWidth = 1;
+      zoomCtx.beginPath();
+      zoomCtx.moveTo(overlayX, centerYCanvas + 0.5);
+      zoomCtx.lineTo(overlayX + Math.max(overlayW, 1), centerYCanvas + 0.5);
+      zoomCtx.stroke();
       zoomCtx.restore();
     }
   }
@@ -362,16 +371,6 @@ function drawZoomCanvasAt(x, y) {
       zoomCtx.restore();
     }
   }
-
-  zoomCtx.save();
-  zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-  zoomCtx.lineWidth = 1;
-  zoomCtx.beginPath();
-  zoomCtx.moveTo(zoomCanvas.width / 2 + 0.5, 0);
-  zoomCtx.lineTo(zoomCanvas.width / 2 + 0.5, zoomCanvas.height);
-  zoomCtx.moveTo(0, zoomCanvas.height / 2 + 0.5);
-  zoomCtx.lineTo(zoomCanvas.width, zoomCanvas.height / 2 + 0.5);
-  zoomCtx.stroke();
 
   zoomCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
   zoomCtx.fillRect(6, 6, 140, 18);
