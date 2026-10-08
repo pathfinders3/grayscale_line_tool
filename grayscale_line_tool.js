@@ -225,6 +225,36 @@ function getZoomLevel() {
   return parseZoomLevel(zoomLevelInput.value, 4);
 }
 
+function getGraphMarkerSourceXPositions() {
+  if (!graphMarkerState || !graphMarkerState.type || !Array.isArray(graphMarkerState.values) || graphMarkerState.values.length === 0) {
+    return [];
+  }
+
+  const lines = getActiveLinesFromGraphState();
+  if (!lines || lines.length === 0) return [];
+
+  const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
+  if (sampleCount <= 0) return [];
+
+  const positions = [];
+  for (const sampleIndex of graphMarkerState.values) {
+    if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || sampleIndex >= sampleCount) continue;
+
+    let mappedX = null;
+    if (currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)) {
+      mappedX = getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax);
+    } else if (sourceCanvas) {
+      mappedX = Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1));
+    }
+
+    if (Number.isFinite(mappedX)) {
+      positions.push(mappedX);
+    }
+  }
+
+  return positions;
+}
+
 function drawZoomCanvasAt(x, y) {
   if (!zoomCanvas || !zoomCtx) return;
 
@@ -276,6 +306,35 @@ function drawZoomCanvasAt(x, y) {
     zoomCtx.lineTo(guideCanvasX + 0.5, zoomCanvas.height);
     zoomCtx.stroke();
     zoomCtx.restore();
+  }
+
+  const markerXPositions = getGraphMarkerSourceXPositions();
+  if (markerXPositions.length > 0) {
+    const color = getMarkerColor(graphMarkerState && graphMarkerState.type ? graphMarkerState.type : 'hill');
+    const inViewXs = markerXPositions
+      .filter((px) => px >= startX && px <= startX + sampleWidth)
+      .map((px) => px - startX)
+      .sort((a, b) => a - b);
+
+    if (inViewXs.length > 0) {
+      const leftPx = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((inViewXs[0] / Math.max(1, sampleWidth)) * zoomCanvas.width)));
+      const rightPx = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((inViewXs[inViewXs.length - 1] / Math.max(1, sampleWidth)) * zoomCanvas.width)));
+      zoomCtx.save();
+      zoomCtx.fillStyle = color + '44';
+      if (rightPx > leftPx) {
+        zoomCtx.fillRect(leftPx, 0, rightPx - leftPx, zoomCanvas.height);
+      }
+      zoomCtx.strokeStyle = color;
+      zoomCtx.lineWidth = 2;
+      zoomCtx.beginPath();
+      for (const px of inViewXs) {
+        const drawX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((px / Math.max(1, sampleWidth)) * zoomCanvas.width)));
+        zoomCtx.moveTo(drawX + 0.5, 0);
+        zoomCtx.lineTo(drawX + 0.5, zoomCanvas.height);
+      }
+      zoomCtx.stroke();
+      zoomCtx.restore();
+    }
   }
 
   zoomCtx.save();
@@ -626,6 +685,9 @@ function renderCurrentGraphWithHoverGuide() {
   }
 
   drawGraphHoverGuide();
+  if (hasImage && sourceCanvas) {
+    redrawZoomCanvas();
+  }
 }
 
 function setGraphHoverInfo(text) {
