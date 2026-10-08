@@ -258,6 +258,16 @@ function getGraphMarkerSourceXPositions() {
 function drawZoomCanvasAt(x, y) {
   if (!zoomCanvas || !zoomCtx) return;
 
+  const zoomLevel = getZoomLevel();
+  if (hasImage && sourceCanvas) {
+    const desiredWidth = Math.max(480, Math.min(sourceCanvas.width, Math.max(480, Math.round(sourceCanvas.width / zoomLevel))));
+    const desiredHeight = Math.max(320, Math.min(sourceCanvas.height, Math.max(320, Math.round(sourceCanvas.height / zoomLevel))));
+    if (zoomCanvas.width !== desiredWidth || zoomCanvas.height !== desiredHeight) {
+      zoomCanvas.width = desiredWidth;
+      zoomCanvas.height = desiredHeight;
+    }
+  }
+
   zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
 
   if (!hasImage || !sourceCanvas) {
@@ -269,7 +279,6 @@ function drawZoomCanvasAt(x, y) {
     return;
   }
 
-  const zoomLevel = getZoomLevel();
   const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
   const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
   zoomFocusPoint = { x: clampedX, y: clampedY };
