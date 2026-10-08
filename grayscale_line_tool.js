@@ -293,6 +293,32 @@ function drawZoomCanvasAt(x, y) {
     zoomCanvas.height
   );
 
+  if (selection && Number.isFinite(selection.xMin) && Number.isFinite(selection.xMax) && Number.isFinite(selection.yTop) && Number.isFinite(selection.yBottom)) {
+    const selXMin = Math.max(0, Math.min(sourceCanvas.width - 1, Math.min(selection.xMin, selection.xMax)));
+    const selXMax = Math.max(0, Math.min(sourceCanvas.width - 1, Math.max(selection.xMin, selection.xMax)));
+    const selYMin = Math.max(0, Math.min(sourceCanvas.height - 1, Math.min(selection.yTop, selection.yBottom)));
+    const selYMax = Math.max(0, Math.min(sourceCanvas.height - 1, Math.max(selection.yTop, selection.yBottom)));
+
+    const rectLeft = Math.max(selXMin, startX);
+    const rectRight = Math.min(selXMax, startX + sampleWidth - 1);
+    const rectTop = Math.max(selYMin, startY);
+    const rectBottom = Math.min(selYMax, startY + sampleHeight - 1);
+
+    if (rectRight >= rectLeft && rectBottom >= rectTop) {
+      const overlayX = ((rectLeft - startX) / Math.max(1, sampleWidth)) * zoomCanvas.width;
+      const overlayY = ((rectTop - startY) / Math.max(1, sampleHeight)) * zoomCanvas.height;
+      const overlayW = ((rectRight - rectLeft + 1) / Math.max(1, sampleWidth)) * zoomCanvas.width;
+      const overlayH = ((rectBottom - rectTop + 1) / Math.max(1, sampleHeight)) * zoomCanvas.height;
+
+      zoomCtx.save();
+      zoomCtx.strokeStyle = 'rgba(255, 0, 0, 0.95)';
+      zoomCtx.lineWidth = 2;
+      zoomCtx.setLineDash([6, 3]);
+      zoomCtx.strokeRect(overlayX + 0.5, overlayY + 0.5, overlayW, overlayH);
+      zoomCtx.restore();
+    }
+  }
+
   if (typeof zoomGuideLineX === 'number') {
     const guideXRatio = sampleWidth > 1 ? (zoomGuideLineX - startX) / (sampleWidth - 1) : 0.5;
     const guideCanvasX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round(guideXRatio * (zoomCanvas.width - 1))));
