@@ -10,7 +10,6 @@
   .canvases { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-start; }
   .canvas-box { border:1px solid #555; background:#111; }
   .canvas-box p { margin:0; padding:4px 8px; font-size:11px; color:#888; border-bottom:1px solid #333; }
-  .zoom-canvas-wrap { max-width:480px; max-height:320px; overflow:auto; border:1px solid #555; background:#111; }
   .analysis-box { width:320px; min-height:320px; border:1px solid #555; background:#111; padding:8px; }
   .analysis-options { margin-bottom:8px; padding:8px; border:1px solid #3b3b3b; border-radius:5px; background:#181818; }
   .analysis-options h3 { margin:0 0 6px; font-size:12px; font-weight:600; color:#bfbfbf; }
@@ -23,9 +22,7 @@
   .peak-toggle { width:100%; text-align:left; padding:7px 9px; border:0; border-bottom:1px solid #2e2e2e; background:#1c1c1c; color:#eee; cursor:pointer; border-radius:0; }
   .peak-toggle:hover { background:#2a2a2a; }
   .peak-content { display:none; padding:8px 9px; font-size:12px; white-space:pre-wrap; line-height:1.45; color:#d8d8d8; max-height:220px; overflow:auto; }
-  canvas { display:block; height:auto; }
-  #originalCanvas, #graphCanvas { max-width:480px; }
-  #zoomCanvas { display:block; max-width:none; min-width:480px; }
+  canvas { display:block; max-width: 480px; height:auto; }
   #originalCanvas { cursor: crosshair; }
   .controls { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:10px; }
   label { font-size:13px; display:flex; align-items:center; gap:6px; }
@@ -52,9 +49,7 @@
   </div>
   <div class="canvas-box">
     <p>확대 이미지</p>
-    <div class="zoom-canvas-wrap">
-      <canvas id="zoomCanvas" width="480" height="320"></canvas>
-    </div>
+    <canvas id="zoomCanvas" width="480" height="320"></canvas>
   </div>
   <div class="canvas-box">
     <p>Grayscale Line Graph</p>
