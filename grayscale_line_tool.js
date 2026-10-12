@@ -1556,7 +1556,7 @@ originalCanvas.addEventListener('mousedown', (e) => {
 originalCanvas.addEventListener('mousemove', (e) => {
   const { x, y } = getCanvasCoords(e);
   setOriginalHoverInfo(`original cursor: x=${x}, y=${y}`);
-  if (hasImage) {
+  if (hasImage && e.shiftKey) {
     drawZoomCanvasAt(x, y);
   }
 
