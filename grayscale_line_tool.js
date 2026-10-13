@@ -1617,8 +1617,9 @@ window.addEventListener('keydown', (event) => {
   event.preventDefault();
   if (!hasImage || !selection) return;
 
-  const dx = key === 'd' ? 5 : key === 'a' ? -5 : 0;
-  const dy = key === 's' ? 5 : key === 'w' ? -5 : 0;
+  const step = event.shiftKey ? 1 : 5;
+  const dx = key === 'd' ? step : key === 'a' ? -step : 0;
+  const dy = key === 's' ? step : key === 'w' ? -step : 0;
   moveSelectionBy(dx, dy);
 });
 
