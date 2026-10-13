@@ -67,6 +67,8 @@ let zoomGuideLineX = null;
 let zoomGuideLineXTimer = null;
 let zoomGuideLineY = null;
 let zoomGuideLineYTimer = null;
+let zoomSelectionRect = null;
+let zoomSelectionRectTimer = null;
 const STORAGE_KEY = 'grayscale-line-tool:image';
 const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
@@ -322,6 +324,22 @@ function drawZoomCanvasAt(x, y) {
     zoomCtx.moveTo(0, guideCanvasY + 0.5);
     zoomCtx.lineTo(zoomCanvas.width, guideCanvasY + 0.5);
     zoomCtx.stroke();
+    zoomCtx.restore();
+  }
+
+  if (zoomSelectionRect) {
+    const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(zoomSelectionRect.x)));
+    const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(zoomSelectionRect.y)));
+    const rectLeft = Math.max(0, Math.min(zoomCanvas.width, ((sourceX - startX) / Math.max(1, sampleWidth)) * zoomCanvas.width));
+    const rectTop = Math.max(0, Math.min(zoomCanvas.height, ((sourceY - startY) / Math.max(1, sampleHeight)) * zoomCanvas.height));
+    const rectWidth = Math.max(1, (zoomCanvas.width / Math.max(1, sampleWidth)) * 1);
+    const rectHeight = Math.max(1, (zoomCanvas.height / Math.max(1, sampleHeight)) * 1);
+
+    zoomCtx.save();
+    zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    zoomCtx.lineWidth = 1;
+    zoomCtx.setLineDash([4, 4]);
+    zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
     zoomCtx.restore();
   }
 
@@ -832,6 +850,29 @@ function showTemporaryZoomHorizontalGuideLine(y, durationMs = 15000) {
   zoomGuideLineYTimer = setTimeout(() => {
     zoomGuideLineY = null;
     zoomGuideLineYTimer = null;
+    redrawZoomCanvas();
+  }, durationMs);
+}
+
+function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
+  if (!hasImage || !sourceCanvas) return;
+  const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
+  const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
+  zoomSelectionRect = {
+    x: clampedX,
+    y: clampedY,
+    size: Math.max(1, Number(size) || 1)
+  };
+
+  if (zoomSelectionRectTimer) {
+    clearTimeout(zoomSelectionRectTimer);
+    zoomSelectionRectTimer = null;
+  }
+
+  redrawZoomCanvas();
+  zoomSelectionRectTimer = setTimeout(() => {
+    zoomSelectionRect = null;
+    zoomSelectionRectTimer = null;
     redrawZoomCanvas();
   }, durationMs);
 }
@@ -1404,10 +1445,15 @@ function loadImageIntoCanvases(bitmap) {
     clearTimeout(zoomGuideLineYTimer);
     zoomGuideLineYTimer = null;
   }
+  if (zoomSelectionRectTimer) {
+    clearTimeout(zoomSelectionRectTimer);
+    zoomSelectionRectTimer = null;
+  }
   originalGuideLineY = null;
   originalGuideLineX = null;
   zoomGuideLineX = null;
   zoomGuideLineY = null;
+  zoomSelectionRect = null;
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   const midX = Math.round((selection.xMin + selection.xMax) / 2);
@@ -2395,6 +2441,27 @@ document.getElementById('peakSidesToggle').addEventListener('click', () => {
 
 document.getElementById('peakMarkerToggle').addEventListener('click', () => {
   togglePeakPanel('peakMarkerPanel', 'peakMarkerToggle');
+});
+
+zoomCanvas.addEventListener('click', (event) => {
+  if (!hasImage || !sourceCanvas || !zoomFocusPoint) return;
+
+  const rect = zoomCanvas.getBoundingClientRect();
+  const scaleX = zoomCanvas.width / rect.width;
+  const scaleY = zoomCanvas.height / rect.height;
+  const localX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((event.clientX - rect.left) * scaleX)));
+  const localY = Math.max(0, Math.min(zoomCanvas.height - 1, Math.round((event.clientY - rect.top) * scaleY)));
+
+  const zoomLevel = getZoomLevel();
+  const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
+  const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+  const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, zoomFocusPoint.x - Math.floor(sampleWidth / 2)));
+  const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, zoomFocusPoint.y - Math.floor(sampleHeight / 2)));
+
+  const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (localX / Math.max(1, zoomCanvas.width)) * sampleWidth)));
+  const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (localY / Math.max(1, zoomCanvas.height)) * sampleHeight)));
+
+  showTemporaryZoomSelectionRect(sourceX, sourceY, 7, 12000);
 });
 
 graphCanvas.addEventListener('mousemove', (event) => {
