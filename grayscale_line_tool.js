@@ -1426,18 +1426,11 @@ document.addEventListener('paste', async (e) => {
 });
 
 function createDefaultSelection(width, height) {
-  const xPad = Math.max(8, Math.round(width * 0.1));
-  const yPad = Math.max(8, Math.round(height * 0.15));
-  const xMin = Math.min(width - 1, Math.max(0, xPad));
-  const xMax = Math.max(xMin + 1, width - xPad - 1);
-  const yTop = Math.min(height - 1, Math.max(0, yPad));
-  const yBottom = Math.max(yTop + 1, height - yPad - 1);
-
   return {
-    xMin,
-    xMax,
-    yTop,
-    yBottom
+    xMin: 0,
+    xMax: Math.max(0, width - 1),
+    yTop: 0,
+    yBottom: Math.max(0, height - 1)
   };
 }
 
