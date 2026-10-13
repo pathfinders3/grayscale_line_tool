@@ -15,6 +15,7 @@ const peakSidesPanelEl = document.getElementById('peakSidesPanel');
 const peakMarkerPanelEl = document.getElementById('peakMarkerPanel');
 const originalHoverInfoEl = document.getElementById('originalHoverInfo');
 const graphHoverInfoEl = document.getElementById('graphHoverInfo');
+const zoomPixelInfoEl = document.getElementById('zoomPixelInfo');
 const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
 const peakThresholdRatioInput = document.getElementById('peakThresholdRatioInput');
@@ -342,25 +343,6 @@ function drawZoomCanvasAt(x, y) {
     zoomCtx.lineWidth = 1;
     zoomCtx.setLineDash([4, 4]);
     zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
-    zoomCtx.restore();
-  }
-
-  if (zoomPixelInfo && Number.isInteger(zoomPixelInfo.x) && Number.isInteger(zoomPixelInfo.y)) {
-    const pixelSourceX = Math.max(0, Math.min(sourceCanvas.width - 1, zoomPixelInfo.x));
-    const pixelSourceY = Math.max(0, Math.min(sourceCanvas.height - 1, zoomPixelInfo.y));
-    const pixelCanvasX = Math.max(0, Math.min(zoomCanvas.width - 1, ((pixelSourceX - startX) / Math.max(1, sampleWidth)) * zoomCanvas.width));
-    const pixelCanvasY = Math.max(0, Math.min(zoomCanvas.height - 1, ((pixelSourceY - startY) / Math.max(1, sampleHeight)) * zoomCanvas.height));
-    const label = `RGB(${zoomPixelInfo.r}, ${zoomPixelInfo.g}, ${zoomPixelInfo.b})`;
-    const textWidth = zoomCtx.measureText(label).width;
-    const boxX = Math.max(8, Math.min(zoomCanvas.width - textWidth - 12, pixelCanvasX + 8));
-    const boxY = Math.max(8, Math.min(zoomCanvas.height - 20, pixelCanvasY - 6));
-
-    zoomCtx.save();
-    zoomCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    zoomCtx.fillRect(boxX, boxY, textWidth + 10, 18);
-    zoomCtx.fillStyle = '#ffffff';
-    zoomCtx.font = '12px sans-serif';
-    zoomCtx.fillText(label, boxX + 5, boxY + 13);
     zoomCtx.restore();
   }
 
@@ -746,6 +728,11 @@ function setGraphHoverInfo(text) {
   graphHoverInfoEl.textContent = text;
 }
 
+function setZoomPixelInfo(text) {
+  if (!zoomPixelInfoEl) return;
+  zoomPixelInfoEl.textContent = text || 'zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)';
+}
+
 function setBrightnessCheckInfo(text) {
   const el = document.getElementById('brightnessCheckInfo');
   if (!el) return;
@@ -886,13 +873,16 @@ function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
   };
 
   const pixel = sourceCtx.getImageData(clampedX, clampedY, 1, 1).data;
+  const gray = Math.round(0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2]);
   zoomPixelInfo = {
     x: clampedX,
     y: clampedY,
     r: pixel[0],
     g: pixel[1],
-    b: pixel[2]
+    b: pixel[2],
+    gray
   };
+  setZoomPixelInfo(`zoom pixel: x=${clampedX}, y=${clampedY}, RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]}), Gray(${gray})`);
 
   if (zoomSelectionRectTimer) {
     clearTimeout(zoomSelectionRectTimer);
@@ -912,6 +902,7 @@ function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
   zoomPixelInfoTimer = setTimeout(() => {
     zoomPixelInfo = null;
     zoomPixelInfoTimer = null;
+    setZoomPixelInfo('zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)');
     redrawZoomCanvas();
   }, durationMs);
 }
@@ -1498,6 +1489,7 @@ function loadImageIntoCanvases(bitmap) {
   zoomGuideLineY = null;
   zoomSelectionRect = null;
   zoomPixelInfo = null;
+  setZoomPixelInfo('zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)');
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   const midX = Math.round((selection.xMin + selection.xMax) / 2);
