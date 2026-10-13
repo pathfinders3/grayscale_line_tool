@@ -329,23 +329,28 @@ function drawZoomCanvasAt(x, y) {
   if (markerXPositions.length > 0) {
     const color = getMarkerColor(graphMarkerState && graphMarkerState.type ? graphMarkerState.type : 'hill');
     const inViewXs = markerXPositions
-      .filter((px) => px >= startX && px <= startX + sampleWidth)
+      .filter((px) => px >= startX && px <= startX + sampleWidth - 1)
       .map((px) => px - startX)
       .sort((a, b) => a - b);
 
     if (inViewXs.length > 0) {
-      const leftPx = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((inViewXs[0] / Math.max(1, sampleWidth)) * zoomCanvas.width)));
-      const rightPx = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((inViewXs[inViewXs.length - 1] / Math.max(1, sampleWidth)) * zoomCanvas.width)));
+      const firstSampleX = inViewXs[0];
+      const lastSampleX = inViewXs[inViewXs.length - 1];
+      // Fill using pixel edges so the last sample column is included.
+      const leftEdge = (firstSampleX / Math.max(1, sampleWidth)) * zoomCanvas.width;
+      const rightEdge = ((lastSampleX + 1) / Math.max(1, sampleWidth)) * zoomCanvas.width;
+      const clampedLeftEdge = Math.max(0, Math.min(zoomCanvas.width, leftEdge));
+      const clampedRightEdge = Math.max(0, Math.min(zoomCanvas.width, rightEdge));
       zoomCtx.save();
       zoomCtx.fillStyle = color + '44';
-      if (rightPx > leftPx) {
-        zoomCtx.fillRect(leftPx, 0, rightPx - leftPx, zoomCanvas.height);
+      if (clampedRightEdge > clampedLeftEdge) {
+        zoomCtx.fillRect(clampedLeftEdge, 0, clampedRightEdge - clampedLeftEdge, zoomCanvas.height);
       }
       zoomCtx.strokeStyle = color;
       zoomCtx.lineWidth = 2;
       zoomCtx.beginPath();
       for (const px of inViewXs) {
-        const drawX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((px / Math.max(1, sampleWidth)) * zoomCanvas.width)));
+        const drawX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round(((px + 0.5) / Math.max(1, sampleWidth)) * zoomCanvas.width)));
         zoomCtx.moveTo(drawX + 0.5, 0);
         zoomCtx.lineTo(drawX + 0.5, zoomCanvas.height);
       }
