@@ -69,6 +69,8 @@ let zoomGuideLineY = null;
 let zoomGuideLineYTimer = null;
 let zoomSelectionRect = null;
 let zoomSelectionRectTimer = null;
+let zoomPixelInfo = null;
+let zoomPixelInfoTimer = null;
 const STORAGE_KEY = 'grayscale-line-tool:image';
 const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
@@ -340,6 +342,25 @@ function drawZoomCanvasAt(x, y) {
     zoomCtx.lineWidth = 1;
     zoomCtx.setLineDash([4, 4]);
     zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
+    zoomCtx.restore();
+  }
+
+  if (zoomPixelInfo && Number.isInteger(zoomPixelInfo.x) && Number.isInteger(zoomPixelInfo.y)) {
+    const pixelSourceX = Math.max(0, Math.min(sourceCanvas.width - 1, zoomPixelInfo.x));
+    const pixelSourceY = Math.max(0, Math.min(sourceCanvas.height - 1, zoomPixelInfo.y));
+    const pixelCanvasX = Math.max(0, Math.min(zoomCanvas.width - 1, ((pixelSourceX - startX) / Math.max(1, sampleWidth)) * zoomCanvas.width));
+    const pixelCanvasY = Math.max(0, Math.min(zoomCanvas.height - 1, ((pixelSourceY - startY) / Math.max(1, sampleHeight)) * zoomCanvas.height));
+    const label = `RGB(${zoomPixelInfo.r}, ${zoomPixelInfo.g}, ${zoomPixelInfo.b})`;
+    const textWidth = zoomCtx.measureText(label).width;
+    const boxX = Math.max(8, Math.min(zoomCanvas.width - textWidth - 12, pixelCanvasX + 8));
+    const boxY = Math.max(8, Math.min(zoomCanvas.height - 20, pixelCanvasY - 6));
+
+    zoomCtx.save();
+    zoomCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    zoomCtx.fillRect(boxX, boxY, textWidth + 10, 18);
+    zoomCtx.fillStyle = '#ffffff';
+    zoomCtx.font = '12px sans-serif';
+    zoomCtx.fillText(label, boxX + 5, boxY + 13);
     zoomCtx.restore();
   }
 
@@ -864,15 +885,33 @@ function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
     size: Math.max(1, Number(size) || 1)
   };
 
+  const pixel = sourceCtx.getImageData(clampedX, clampedY, 1, 1).data;
+  zoomPixelInfo = {
+    x: clampedX,
+    y: clampedY,
+    r: pixel[0],
+    g: pixel[1],
+    b: pixel[2]
+  };
+
   if (zoomSelectionRectTimer) {
     clearTimeout(zoomSelectionRectTimer);
     zoomSelectionRectTimer = null;
+  }
+  if (zoomPixelInfoTimer) {
+    clearTimeout(zoomPixelInfoTimer);
+    zoomPixelInfoTimer = null;
   }
 
   redrawZoomCanvas();
   zoomSelectionRectTimer = setTimeout(() => {
     zoomSelectionRect = null;
     zoomSelectionRectTimer = null;
+    redrawZoomCanvas();
+  }, durationMs);
+  zoomPixelInfoTimer = setTimeout(() => {
+    zoomPixelInfo = null;
+    zoomPixelInfoTimer = null;
     redrawZoomCanvas();
   }, durationMs);
 }
@@ -1449,11 +1488,16 @@ function loadImageIntoCanvases(bitmap) {
     clearTimeout(zoomSelectionRectTimer);
     zoomSelectionRectTimer = null;
   }
+  if (zoomPixelInfoTimer) {
+    clearTimeout(zoomPixelInfoTimer);
+    zoomPixelInfoTimer = null;
+  }
   originalGuideLineY = null;
   originalGuideLineX = null;
   zoomGuideLineX = null;
   zoomGuideLineY = null;
   zoomSelectionRect = null;
+  zoomPixelInfo = null;
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   const midX = Math.round((selection.xMin + selection.xMax) / 2);
