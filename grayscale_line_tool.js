@@ -318,7 +318,7 @@ function drawZoomCanvasAt(x, y) {
 
     zoomCtx.save();
     zoomCtx.setLineDash([5, 4]);
-    zoomCtx.strokeStyle = 'rgba(255, 108, 94, 0.95)';
+    zoomCtx.strokeStyle = 'hsla(5, 100%, 68%, 0.95)';
     zoomCtx.lineWidth = 1;
     zoomCtx.beginPath();
     zoomCtx.moveTo(0, guideCanvasY + 0.5);
@@ -336,7 +336,7 @@ function drawZoomCanvasAt(x, y) {
     const rectHeight = Math.max(1, (zoomCanvas.height / Math.max(1, sampleHeight)) * 1);
 
     zoomCtx.save();
-    zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    zoomCtx.strokeStyle = 'rgba(255, 66, 66, 0.9)';
     zoomCtx.lineWidth = 1;
     zoomCtx.setLineDash([4, 4]);
     zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
