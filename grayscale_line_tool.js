@@ -178,7 +178,7 @@ function getThresholdBrightnessValuesForCurrentGraph() {
     const lineValues = Array.isArray(line.values) ? line.values : [];
     if (lineValues.length === 0) continue;
     const maxValue = Math.max(...lineValues);
-    values.push(maxValue * getPeakThresholdRatio(analysisOptions));
+    values.push(getPeakThresholdValue(maxValue, analysisOptions));
   }
 
   return values;
@@ -421,12 +421,16 @@ function getPeakThresholdRatio(options = {}) {
   return ratio;
 }
 
+function getPeakThresholdValue(maxValue, options = {}) {
+  const thresholdRatio = getPeakThresholdRatio(options);
+  return Math.max(50, maxValue * thresholdRatio);
+}
+
 function findPeaks(values, options = {}) {
   if (!Array.isArray(values) || values.length === 0) return [];
 
-  const thresholdRatio = getPeakThresholdRatio(options);
   const maxValue = Math.max(...values);
-  const threshold = maxValue * thresholdRatio;
+  const threshold = getPeakThresholdValue(maxValue, options);
   const aboveThresholdIndices = values.reduce((acc, value, index) => {
     if (value >= threshold) acc.push(index);
     return acc;
@@ -464,9 +468,8 @@ function findPeaks(values, options = {}) {
 function analyzePeakSides(values, peakIndices, options = {}) {
   if (!Array.isArray(values) || !Array.isArray(peakIndices) || peakIndices.length === 0) return [];
 
-  const thresholdRatio = getPeakThresholdRatio(options);
   const maxValue = Math.max(...values);
-  const threshold = maxValue * thresholdRatio;
+  const threshold = getPeakThresholdValue(maxValue, options);
   const results = [];
 
   for (const peakIndex of peakIndices) {
@@ -924,9 +927,8 @@ function getPlateauRangeForSampleIndex(sampleIndex, values, options = {}) {
     return null;
   }
 
-  const thresholdRatio = getPeakThresholdRatio(options);
   const maxValue = Math.max(...values);
-  const threshold = maxValue * thresholdRatio;
+  const threshold = getPeakThresholdValue(maxValue, options);
   if (values[sampleIndex] < threshold) return null;
 
   let left = sampleIndex;
@@ -954,9 +956,8 @@ function getPlateauRangeForSampleIndex(sampleIndex, values, options = {}) {
 function getHillRangeForSampleIndex(sampleIndex, values, options = {}) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(values) || values.length === 0) return null;
 
-  const thresholdRatio = getPeakThresholdRatio(options);
   const maxValue = Math.max(...values);
-  const threshold = maxValue * thresholdRatio;
+  const threshold = getPeakThresholdValue(maxValue, options);
   if (values[sampleIndex] < threshold) return null;
 
   let left = sampleIndex;
@@ -1315,7 +1316,7 @@ function getPeakThresholdSummaryForCurrentGraph() {
     const values = Array.isArray(line.values) ? line.values : [];
     if (values.length === 0) continue;
     const maxValue = Math.max(...values);
-    const threshold = maxValue * getPeakThresholdRatio(analysisOptions);
+    const threshold = getPeakThresholdValue(maxValue, analysisOptions);
     thresholds.push(`${line.label}: ${threshold.toFixed(1)}`);
   }
 
@@ -1356,7 +1357,7 @@ function updatePeakPanelsFromCurrentGraphState() {
     const values = Array.isArray(line.values) ? line.values : [];
     if (values.length === 0) continue;
     const maxValue = Math.max(...values);
-    const threshold = maxValue * getPeakThresholdRatio(analysisOptions);
+    const threshold = getPeakThresholdValue(maxValue, analysisOptions);
     parts.push(`${line.label}: ${threshold.toFixed(1)}`);
   }
 
@@ -2006,7 +2007,7 @@ function drawThresholdReferenceLine(ctx, canvas, values, yMin, yMax, color, labe
   const h = bottom - top;
   const range = (yMax - yMin) || 1;
   const maxValue = Math.max(...values);
-  const thresholdValue = maxValue * getPeakThresholdRatio(analysisOptions);
+  const thresholdValue = getPeakThresholdValue(maxValue, analysisOptions);
   const thresholdNorm = (thresholdValue - yMin) / range;
   const thresholdY = bottom - thresholdNorm * h;
 
