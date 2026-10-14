@@ -2570,6 +2570,8 @@ if (plateauToleranceInput) {
 }
 
 if (peakThresholdRatioInput) {
+  peakThresholdRatioInput.title = '실제 기준값은 최소 50이며, 비율이 낮아도 최소 50이 적용됩니다.';
+
   peakThresholdRatioInput.addEventListener('input', () => {
     hasUserEditedThresholdRatio = true;
     syncAnalysisOptionsFromInputs();
