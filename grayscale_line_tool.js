@@ -2474,7 +2474,7 @@ document.getElementById('peakMarkerToggle').addEventListener('click', () => {
 });
 
 zoomCanvas.addEventListener('click', (event) => {
-  if (!hasImage || !sourceCanvas || !zoomFocusPoint) return;
+  if (!hasImage || !sourceCanvas) return;
 
   const rect = zoomCanvas.getBoundingClientRect();
   const scaleX = zoomCanvas.width / rect.width;
@@ -2485,11 +2485,19 @@ zoomCanvas.addEventListener('click', (event) => {
   const zoomLevel = getZoomLevel();
   const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
   const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
-  const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, zoomFocusPoint.x - Math.floor(sampleWidth / 2)));
-  const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, zoomFocusPoint.y - Math.floor(sampleHeight / 2)));
+  const centerX = zoomFocusPoint ? zoomFocusPoint.x : Math.floor(sourceCanvas.width / 2);
+  const centerY = zoomFocusPoint ? zoomFocusPoint.y : Math.floor(sourceCanvas.height / 2);
+  const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, centerX - Math.floor(sampleWidth / 2)));
+  const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, centerY - Math.floor(sampleHeight / 2)));
 
   const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (localX / Math.max(1, zoomCanvas.width)) * sampleWidth)));
   const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (localY / Math.max(1, zoomCanvas.height)) * sampleHeight)));
+
+  if (event.shiftKey) {
+    drawZoomCanvasAt(sourceX, sourceY);
+    showTemporaryZoomSelectionRect(sourceX, sourceY, 7, 12000);
+    return;
+  }
 
   showTemporaryZoomSelectionRect(sourceX, sourceY, 7, 12000);
 });
