@@ -1681,6 +1681,11 @@ window.addEventListener('keydown', (event) => {
     const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (zoomMouse.x / Math.max(1, zoomCanvas.width)) * sampleWidth)));
     const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (zoomMouse.y / Math.max(1, zoomCanvas.height)) * sampleHeight)));
 
+    yInput.value = String(sourceY);
+    showTemporaryOriginalGuideLine(sourceY, 15000);
+    showTemporaryOriginalVerticalGuideLine(sourceX, 15000);
+    showTemporaryZoomHorizontalGuideLine(sourceY, 15000);
+    showTemporaryZoomVerticalGuideLine(sourceX, 15000);
     drawZoomCanvasAt(sourceX, sourceY);
     showTemporaryZoomSelectionRect(sourceX, sourceY, 7, 12000);
     return;
