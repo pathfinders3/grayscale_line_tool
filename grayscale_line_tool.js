@@ -16,6 +16,7 @@ const peakMarkerPanelEl = document.getElementById('peakMarkerPanel');
 const originalHoverInfoEl = document.getElementById('originalHoverInfo');
 const graphHoverInfoEl = document.getElementById('graphHoverInfo');
 const zoomPixelInfoEl = document.getElementById('zoomPixelInfo');
+const zoomCanvasMetaEl = document.getElementById('zoomCanvasMeta');
 const peakModeSelect = document.getElementById('peakModeSelect');
 const plateauToleranceInput = document.getElementById('plateauToleranceInput');
 const peakThresholdRatioInput = document.getElementById('peakThresholdRatioInput');
@@ -282,6 +283,13 @@ function drawZoomCanvasAt(x, y) {
   const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
   zoomFocusPoint = { x: clampedX, y: clampedY };
 
+  const sourceMetaX = zoomSelectionRect ? zoomSelectionRect.x : clampedX;
+  const sourceMetaY = zoomSelectionRect ? zoomSelectionRect.y : clampedY;
+  const metaText = zoomSelectionRect
+    ? `src(${sourceMetaX}, ${sourceMetaY}) / (x=${clampedX}, y=${clampedY}) / ${zoomLevel}x`
+    : `(x=${clampedX}, y=${clampedY}) / ${zoomLevel}x`;
+  setZoomCanvasMeta(metaText);
+
   const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
   const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
 
@@ -381,26 +389,33 @@ function drawZoomCanvasAt(x, y) {
     }
   }
 
-  zoomCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  zoomCtx.fillRect(6, 6, 140, 18);
-  zoomCtx.fillStyle = '#8cf7ff';
-  zoomCtx.font = '12px sans-serif';
-  zoomCtx.fillText(`x=${clampedX}, y=${clampedY}, ${zoomLevel}x`, 10, 19);
   zoomCtx.restore();
 }
 
 function redrawZoomCanvas() {
   if (!hasImage || !sourceCanvas) {
+    setZoomCanvasMeta('x=-, y=-, 4x');
     drawZoomCanvasAt(0, 0);
     return;
   }
 
   if (zoomFocusPoint) {
+    const zoomLevel = getZoomLevel();
+    const sourceMetaX = zoomSelectionRect ? zoomSelectionRect.x : zoomFocusPoint.x;
+    const sourceMetaY = zoomSelectionRect ? zoomSelectionRect.y : zoomFocusPoint.y;
+    const metaText = zoomSelectionRect
+      ? `(x=${zoomFocusPoint.x}, y=${zoomFocusPoint.y}) / src (${sourceMetaX}, ${sourceMetaY}) / ${zoomLevel}x`
+      : `(x=${zoomFocusPoint.x}, y=${zoomFocusPoint.y}) / ${zoomLevel}x`;
+    setZoomCanvasMeta(metaText);
     drawZoomCanvasAt(zoomFocusPoint.x, zoomFocusPoint.y);
     return;
   }
 
-  drawZoomCanvasAt(Math.floor(sourceCanvas.width / 2), Math.floor(sourceCanvas.height / 2));
+  const defaultX = Math.floor(sourceCanvas.width / 2);
+  const defaultY = Math.floor(sourceCanvas.height / 2);
+  const zoomLevel = getZoomLevel();
+  setZoomCanvasMeta(`x=${defaultX}, y=${defaultY}, ${zoomLevel}x`);
+  drawZoomCanvasAt(defaultX, defaultY);
 }
 
 function togglePeakPanel(panelId, buttonId) {
@@ -737,6 +752,11 @@ function setZoomPixelInfo(text) {
   zoomPixelInfoEl.textContent = text || 'zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)';
 }
 
+function setZoomCanvasMeta(text) {
+  if (!zoomCanvasMetaEl) return;
+  zoomCanvasMetaEl.textContent = text || 'x=-, y=-, 4x';
+}
+
 function setBrightnessCheckInfo(text) {
   const el = document.getElementById('brightnessCheckInfo');
   if (!el) return;
@@ -887,6 +907,7 @@ function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
     gray
   };
   setZoomPixelInfo(`zoom pixel: x=${clampedX}, y=${clampedY}, RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]}), Gray(${gray})`);
+  setZoomCanvasMeta(`(x=${zoomFocusPoint ? zoomFocusPoint.x : clampedX}, y=${zoomFocusPoint ? zoomFocusPoint.y : clampedY}) / src (${clampedX}, ${clampedY}) / ${getZoomLevel()}x`);
 
   if (zoomSelectionRectTimer) {
     clearTimeout(zoomSelectionRectTimer);
@@ -1485,6 +1506,7 @@ function loadImageIntoCanvases(bitmap) {
   zoomSelectionRect = null;
   zoomPixelInfo = null;
   setZoomPixelInfo('zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)');
+  setZoomCanvasMeta('x=-, y=-, 4x');
   selection = createDefaultSelection(bitmap.width, bitmap.height);
   const midY = Math.round((selection.yTop + selection.yBottom) / 2);
   const midX = Math.round((selection.xMin + selection.xMax) / 2);

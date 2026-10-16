@@ -10,6 +10,9 @@
   .canvases { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-start; }
   .canvas-box { border:1px solid #555; background:#111; }
   .canvas-box p { margin:0; padding:4px 8px; font-size:11px; color:#888; border-bottom:1px solid #333; }
+  .zoom-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .zoom-header .label { flex:1; }
+  .zoom-header .meta { font-size:11px; color:#b7ecff; white-space:nowrap; }
   .analysis-box { width:320px; min-height:320px; border:1px solid #555; background:#111; padding:8px; }
   .analysis-options { margin-bottom:8px; padding:8px; border:1px solid #3b3b3b; border-radius:5px; background:#181818; }
   .analysis-options h3 { margin:0 0 6px; font-size:12px; font-weight:600; color:#bfbfbf; }
@@ -53,7 +56,10 @@
     <canvas id="originalCanvas" width="480" height="320"></canvas>
   </div>
   <div class="canvas-box">
-    <p>확대 이미지</p>
+    <div class="zoom-header">
+      <p class="label">확대 이미지</p>
+      <p id="zoomCanvasMeta" class="meta">x=-, y=-, 4x</p>
+    </div>
     <canvas id="zoomCanvas" width="480" height="320"></canvas>
   </div>
   <div class="canvas-box">
