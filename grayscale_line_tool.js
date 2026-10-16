@@ -72,6 +72,7 @@ let zoomSelectionRect = null;
 let zoomSelectionRectTimer = null;
 let zoomPixelInfo = null;
 let zoomPixelInfoTimer = null;
+let zoomMouse = null;
 const STORAGE_KEY = 'grayscale-line-tool:image';
 const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
@@ -1667,6 +1668,24 @@ window.addEventListener('mouseup', () => {
 
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
+  if (event.key === 'F1' && hasImage && sourceCanvas && zoomMouse && zoomMouse.inside) {
+    event.preventDefault();
+    const zoomLevel = getZoomLevel();
+    const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
+    const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+    const centerX = zoomFocusPoint ? zoomFocusPoint.x : Math.floor(sourceCanvas.width / 2);
+    const centerY = zoomFocusPoint ? zoomFocusPoint.y : Math.floor(sourceCanvas.height / 2);
+    const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, centerX - Math.floor(sampleWidth / 2)));
+    const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, centerY - Math.floor(sampleHeight / 2)));
+
+    const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (zoomMouse.x / Math.max(1, zoomCanvas.width)) * sampleWidth)));
+    const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (zoomMouse.y / Math.max(1, zoomCanvas.height)) * sampleHeight)));
+
+    drawZoomCanvasAt(sourceX, sourceY);
+    showTemporaryZoomSelectionRect(sourceX, sourceY, 7, 12000);
+    return;
+  }
+
   if (event.key === 'Escape') {
     if (hoverGuideState.locked) {
       event.preventDefault();
@@ -2471,6 +2490,19 @@ document.getElementById('peakSidesToggle').addEventListener('click', () => {
 
 document.getElementById('peakMarkerToggle').addEventListener('click', () => {
   togglePeakPanel('peakMarkerPanel', 'peakMarkerToggle');
+});
+
+zoomCanvas.addEventListener('mousemove', (event) => {
+  const rect = zoomCanvas.getBoundingClientRect();
+  const scaleX = zoomCanvas.width / rect.width;
+  const scaleY = zoomCanvas.height / rect.height;
+  const localX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round((event.clientX - rect.left) * scaleX)));
+  const localY = Math.max(0, Math.min(zoomCanvas.height - 1, Math.round((event.clientY - rect.top) * scaleY)));
+  zoomMouse = { x: localX, y: localY, inside: true };
+});
+
+zoomCanvas.addEventListener('mouseleave', () => {
+  zoomMouse = null;
 });
 
 zoomCanvas.addEventListener('click', (event) => {
