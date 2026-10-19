@@ -264,6 +264,26 @@ function getGraphMarkerSourceXPositions() {
   return positions;
 }
 
+function getZoomCanvasDisplayRect(sampleWidth, sampleHeight) {
+  const sourceAspect = sampleWidth / Math.max(1, sampleHeight);
+  const canvasAspect = zoomCanvas.width / Math.max(1, zoomCanvas.height);
+
+  let drawWidth = zoomCanvas.width;
+  let drawHeight = zoomCanvas.height;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (sourceAspect > canvasAspect) {
+    drawHeight = zoomCanvas.width / sourceAspect;
+    offsetY = (zoomCanvas.height - drawHeight) / 2;
+  } else if (sourceAspect < canvasAspect) {
+    drawWidth = zoomCanvas.height * sourceAspect;
+    offsetX = (zoomCanvas.width - drawWidth) / 2;
+  }
+
+  return { drawWidth, drawHeight, offsetX, offsetY };
+}
+
 function drawZoomCanvasAt(x, y) {
   if (!zoomCanvas || !zoomCtx) return;
 
@@ -292,9 +312,13 @@ function drawZoomCanvasAt(x, y) {
 
   const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
   const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+  const displayRect = getZoomCanvasDisplayRect(sampleWidth, sampleHeight);
 
   const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, clampedX - Math.floor(sampleWidth / 2)));
   const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, clampedY - Math.floor(sampleHeight / 2)));
+
+  zoomCtx.fillStyle = '#111';
+  zoomCtx.fillRect(0, 0, zoomCanvas.width, zoomCanvas.height);
 
   zoomCtx.imageSmoothingEnabled = false;
   zoomCtx.drawImage(
@@ -303,15 +327,15 @@ function drawZoomCanvasAt(x, y) {
     startY,
     sampleWidth,
     sampleHeight,
-    0,
-    0,
-    zoomCanvas.width,
-    zoomCanvas.height
+    displayRect.offsetX,
+    displayRect.offsetY,
+    displayRect.drawWidth,
+    displayRect.drawHeight
   );
 
   if (typeof zoomGuideLineX === 'number') {
     const guideXRatio = sampleWidth > 1 ? (zoomGuideLineX - startX) / (sampleWidth - 1) : 0.5;
-    const guideCanvasX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round(guideXRatio * (zoomCanvas.width - 1))));
+    const guideCanvasX = displayRect.offsetX + Math.max(0, Math.min(1, guideXRatio)) * displayRect.drawWidth;
 
     zoomCtx.save();
     zoomCtx.setLineDash([5, 4]);
@@ -326,7 +350,7 @@ function drawZoomCanvasAt(x, y) {
 
   if (typeof zoomGuideLineY === 'number') {
     const guideYRatio = sampleHeight > 1 ? (zoomGuideLineY - startY) / (sampleHeight - 1) : 0.5;
-    const guideCanvasY = Math.max(0, Math.min(zoomCanvas.height - 1, Math.round(guideYRatio * (zoomCanvas.height - 1))));
+    const guideCanvasY = displayRect.offsetY + Math.max(0, Math.min(1, guideYRatio)) * displayRect.drawHeight;
 
     zoomCtx.save();
     zoomCtx.setLineDash([5, 4]);
@@ -342,10 +366,10 @@ function drawZoomCanvasAt(x, y) {
   if (zoomSelectionRect) {
     const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(zoomSelectionRect.x)));
     const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(zoomSelectionRect.y)));
-    const rectLeft = Math.max(0, Math.min(zoomCanvas.width, ((sourceX - startX) / Math.max(1, sampleWidth)) * zoomCanvas.width));
-    const rectTop = Math.max(0, Math.min(zoomCanvas.height, ((sourceY - startY) / Math.max(1, sampleHeight)) * zoomCanvas.height));
-    const rectWidth = Math.max(1, (zoomCanvas.width / Math.max(1, sampleWidth)) * 1);
-    const rectHeight = Math.max(1, (zoomCanvas.height / Math.max(1, sampleHeight)) * 1);
+    const rectLeft = displayRect.offsetX + ((sourceX - startX) / Math.max(1, sampleWidth)) * displayRect.drawWidth;
+    const rectTop = displayRect.offsetY + ((sourceY - startY) / Math.max(1, sampleHeight)) * displayRect.drawHeight;
+    const rectWidth = Math.max(1, displayRect.drawWidth / Math.max(1, sampleWidth));
+    const rectHeight = Math.max(1, displayRect.drawHeight / Math.max(1, sampleHeight));
 
     zoomCtx.save();
     zoomCtx.strokeStyle = 'rgba(255, 66, 66, 0.9)';
@@ -366,23 +390,22 @@ function drawZoomCanvasAt(x, y) {
     if (inViewXs.length > 0) {
       const firstSampleX = inViewXs[0];
       const lastSampleX = inViewXs[inViewXs.length - 1];
-      // Fill using pixel edges so the last sample column is included.
-      const leftEdge = (firstSampleX / Math.max(1, sampleWidth)) * zoomCanvas.width;
-      const rightEdge = ((lastSampleX + 1) / Math.max(1, sampleWidth)) * zoomCanvas.width;
-      const clampedLeftEdge = Math.max(0, Math.min(zoomCanvas.width, leftEdge));
-      const clampedRightEdge = Math.max(0, Math.min(zoomCanvas.width, rightEdge));
+      const leftEdge = displayRect.offsetX + (firstSampleX / Math.max(1, sampleWidth)) * displayRect.drawWidth;
+      const rightEdge = displayRect.offsetX + ((lastSampleX + 1) / Math.max(1, sampleWidth)) * displayRect.drawWidth;
+      const clampedLeftEdge = Math.max(displayRect.offsetX, Math.min(displayRect.offsetX + displayRect.drawWidth, leftEdge));
+      const clampedRightEdge = Math.max(displayRect.offsetX, Math.min(displayRect.offsetX + displayRect.drawWidth, rightEdge));
       zoomCtx.save();
       zoomCtx.fillStyle = color + '44';
       if (clampedRightEdge > clampedLeftEdge) {
-        zoomCtx.fillRect(clampedLeftEdge, 0, clampedRightEdge - clampedLeftEdge, zoomCanvas.height);
+        zoomCtx.fillRect(clampedLeftEdge, displayRect.offsetY, clampedRightEdge - clampedLeftEdge, displayRect.drawHeight);
       }
       zoomCtx.strokeStyle = color;
       zoomCtx.lineWidth = 2;
       zoomCtx.beginPath();
       for (const px of inViewXs) {
-        const drawX = Math.max(0, Math.min(zoomCanvas.width - 1, Math.round(((px + 0.5) / Math.max(1, sampleWidth)) * zoomCanvas.width)));
-        zoomCtx.moveTo(drawX + 0.5, 0);
-        zoomCtx.lineTo(drawX + 0.5, zoomCanvas.height);
+        const drawX = displayRect.offsetX + ((px + 0.5) / Math.max(1, sampleWidth)) * displayRect.drawWidth;
+        zoomCtx.moveTo(drawX + 0.5, displayRect.offsetY);
+        zoomCtx.lineTo(drawX + 0.5, displayRect.offsetY + displayRect.drawHeight);
       }
       zoomCtx.stroke();
       zoomCtx.restore();
@@ -2544,13 +2567,20 @@ zoomCanvas.addEventListener('click', (event) => {
   const zoomLevel = getZoomLevel();
   const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
   const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+  const displayRect = getZoomCanvasDisplayRect(sampleWidth, sampleHeight);
   const centerX = zoomFocusPoint ? zoomFocusPoint.x : Math.floor(sourceCanvas.width / 2);
   const centerY = zoomFocusPoint ? zoomFocusPoint.y : Math.floor(sourceCanvas.height / 2);
   const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, centerX - Math.floor(sampleWidth / 2)));
   const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, centerY - Math.floor(sampleHeight / 2)));
 
-  const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (localX / Math.max(1, zoomCanvas.width)) * sampleWidth)));
-  const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (localY / Math.max(1, zoomCanvas.height)) * sampleHeight)));
+  const imageLocalX = localX - displayRect.offsetX;
+  const imageLocalY = localY - displayRect.offsetY;
+  if (imageLocalX < 0 || imageLocalY < 0 || imageLocalX > displayRect.drawWidth || imageLocalY > displayRect.drawHeight) {
+    return;
+  }
+
+  const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (imageLocalX / Math.max(1, displayRect.drawWidth)) * sampleWidth)));
+  const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (imageLocalY / Math.max(1, displayRect.drawHeight)) * sampleHeight)));
 
   if (event.shiftKey) {
     drawZoomCanvasAt(sourceX, sourceY);
