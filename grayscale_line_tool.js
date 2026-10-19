@@ -74,6 +74,7 @@ let zoomSelectionRectTimer = null;
 let zoomPixelInfo = null;
 let zoomPixelInfoTimer = null;
 let zoomMouse = null;
+const savedPointSlots = Array(10).fill(null);
 const STORAGE_KEY = 'grayscale-line-tool:image';
 const THRESHOLD_STORAGE_KEY = 'grayscale-line-tool:threshold';
 
@@ -1416,6 +1417,74 @@ function setStatus(msg, isError) {
   statusEl.classList.toggle('error', !!isError);
 }
 
+function getCurrentZoomSourcePoint() {
+  if (!hasImage || !sourceCanvas) return null;
+
+  const zoomLevel = getZoomLevel();
+  const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
+  const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+  const centerX = zoomFocusPoint ? zoomFocusPoint.x : Math.floor(sourceCanvas.width / 2);
+  const centerY = zoomFocusPoint ? zoomFocusPoint.y : Math.floor(sourceCanvas.height / 2);
+  const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, centerX - Math.floor(sampleWidth / 2)));
+  const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, centerY - Math.floor(sampleHeight / 2)));
+
+  if (zoomMouse && zoomMouse.inside) {
+    const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (zoomMouse.x / Math.max(1, zoomCanvas.width)) * sampleWidth)));
+    const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (zoomMouse.y / Math.max(1, zoomCanvas.height)) * sampleHeight)));
+    return { x: sourceX, y: sourceY, sourceX, sourceY };
+  }
+
+  const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, centerX));
+  const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, centerY));
+  return { x: sourceX, y: sourceY, sourceX, sourceY };
+}
+
+function savePointToSlot(slotIndex) {
+  const point = getCurrentZoomSourcePoint();
+  if (!point) {
+    setStatus('저장할 이미지가 없습니다.', true);
+    return;
+  }
+
+  const index = Math.max(1, Math.min(10, Number(slotIndex) || 1));
+  const pixel = sourceCtx.getImageData(point.x, point.y, 1, 1).data;
+  const gray = Math.round(0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2]);
+
+  savedPointSlots[index - 1] = {
+    index,
+    x: point.x,
+    y: point.y,
+    r: pixel[0],
+    g: pixel[1],
+    b: pixel[2],
+    gray,
+    zoomLevel: getZoomLevel(),
+    savedAt: new Date().toISOString()
+  };
+
+  setStatus(`슬롯 ${index}: (${point.x}, ${point.y}) 저장됨 / RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`);
+}
+
+function restorePointFromSlot(slotIndex) {
+  const index = Math.max(1, Math.min(10, Number(slotIndex) || 1));
+  const point = savedPointSlots[index - 1];
+
+  if (!point) {
+    setStatus(`슬롯 ${index}에 저장된 점이 없습니다.`, true);
+    return;
+  }
+
+  const { x, y } = point;
+  yInput.value = String(y);
+  showTemporaryOriginalGuideLine(y, 15000);
+  showTemporaryOriginalVerticalGuideLine(x, 15000);
+  showTemporaryZoomHorizontalGuideLine(y, 15000);
+  showTemporaryZoomVerticalGuideLine(x, 15000);
+  drawZoomCanvasAt(x, y);
+  showTemporaryZoomSelectionRect(x, y, 7, 12000);
+  setStatus(`슬롯 ${index}: (${x}, ${y}) 복원됨`);
+}
+
 function saveCurrentImageToStorage() {
   if (!sourceCanvas || !window.localStorage) return;
 
@@ -1713,6 +1782,24 @@ window.addEventListener('mouseup', () => {
 
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
+
+  if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) {
+    if (event.key === 'Escape') return;
+  }
+
+  if (event.code && /^Digit[0-9]$/.test(event.code)) {
+    const slot = event.code === 'Digit0' ? 10 : Number(event.code.replace('Digit', ''));
+    if (event.shiftKey) {
+      event.preventDefault();
+      savePointToSlot(slot);
+      return;
+    }
+
+    event.preventDefault();
+    restorePointFromSlot(slot);
+    return;
+  }
+
   if (event.key === 'F1' && hasImage && sourceCanvas && zoomMouse && zoomMouse.inside) {
     event.preventDefault();
     const zoomLevel = getZoomLevel();
