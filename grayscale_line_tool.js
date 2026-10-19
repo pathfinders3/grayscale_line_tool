@@ -71,6 +71,7 @@ let zoomGuideLineY = null;
 let zoomGuideLineYTimer = null;
 let zoomSelectionRect = null;
 let zoomSelectionRectTimer = null;
+let lastVisibleZoomSelectionPoint = null;
 let zoomPixelInfo = null;
 let zoomPixelInfoTimer = null;
 let zoomMouse = null;
@@ -914,6 +915,7 @@ function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
   if (!hasImage || !sourceCanvas) return;
   const clampedX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(x)));
   const clampedY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(y)));
+  lastVisibleZoomSelectionPoint = { x: clampedX, y: clampedY };
   zoomSelectionRect = {
     x: clampedX,
     y: clampedY,
@@ -945,6 +947,7 @@ function showTemporaryZoomSelectionRect(x, y, size = 1, durationMs = 12000) {
   redrawZoomCanvas();
   zoomSelectionRectTimer = setTimeout(() => {
     zoomSelectionRect = null;
+    lastVisibleZoomSelectionPoint = null;
     zoomSelectionRectTimer = null;
     redrawZoomCanvas();
   }, durationMs);
@@ -1420,17 +1423,32 @@ function setStatus(msg, isError) {
 function getCurrentZoomSourcePoint() {
   if (!hasImage || !sourceCanvas) return null;
 
+  if (lastVisibleZoomSelectionPoint) {
+    return {
+      x: lastVisibleZoomSelectionPoint.x,
+      y: lastVisibleZoomSelectionPoint.y,
+      sourceX: lastVisibleZoomSelectionPoint.x,
+      sourceY: lastVisibleZoomSelectionPoint.y
+    };
+  }
+
   const zoomLevel = getZoomLevel();
   const sampleWidth = Math.min(sourceCanvas.width, Math.max(1, Math.floor(zoomCanvas.width / zoomLevel)));
   const sampleHeight = Math.min(sourceCanvas.height, Math.max(1, Math.floor(zoomCanvas.height / zoomLevel)));
+  const displayRect = getZoomCanvasDisplayRect(sampleWidth, sampleHeight);
   const centerX = zoomFocusPoint ? zoomFocusPoint.x : Math.floor(sourceCanvas.width / 2);
   const centerY = zoomFocusPoint ? zoomFocusPoint.y : Math.floor(sourceCanvas.height / 2);
   const startX = Math.max(0, Math.min(sourceCanvas.width - sampleWidth, centerX - Math.floor(sampleWidth / 2)));
   const startY = Math.max(0, Math.min(sourceCanvas.height - sampleHeight, centerY - Math.floor(sampleHeight / 2)));
 
   if (zoomMouse && zoomMouse.inside) {
-    const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (zoomMouse.x / Math.max(1, zoomCanvas.width)) * sampleWidth)));
-    const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (zoomMouse.y / Math.max(1, zoomCanvas.height)) * sampleHeight)));
+    const imageLocalX = zoomMouse.x - displayRect.offsetX;
+    const imageLocalY = zoomMouse.y - displayRect.offsetY;
+    if (imageLocalX < 0 || imageLocalY < 0 || imageLocalX > displayRect.drawWidth || imageLocalY > displayRect.drawHeight) {
+      return null;
+    }
+    const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX + (imageLocalX / Math.max(1, displayRect.drawWidth)) * sampleWidth)));
+    const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY + (imageLocalY / Math.max(1, displayRect.drawHeight)) * sampleHeight)));
     return { x: sourceX, y: sourceY, sourceX, sourceY };
   }
 
@@ -1442,7 +1460,7 @@ function getCurrentZoomSourcePoint() {
 function savePointToSlot(slotIndex) {
   const point = getCurrentZoomSourcePoint();
   if (!point) {
-    setStatus('저장할 이미지가 없습니다.', true);
+    setStatus('확대 이미지 영역 안에서 저장할 좌표를 찾지 못했습니다. 마우스를 이미지 위에 두고 다시 시도해 주세요.', true);
     return;
   }
 
@@ -1461,6 +1479,8 @@ function savePointToSlot(slotIndex) {
     zoomLevel: getZoomLevel(),
     savedAt: new Date().toISOString()
   };
+
+  showTemporaryZoomSelectionRect(point.x, point.y, 7, 12000);
 
   setStatus(`슬롯 ${index}: (${point.x}, ${point.y}) 저장됨 / RGB(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`);
 }
