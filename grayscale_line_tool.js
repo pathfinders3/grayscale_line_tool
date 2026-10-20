@@ -72,6 +72,8 @@ let zoomGuideLineYTimer = null;
 let zoomSelectionRect = null;
 let zoomSelectionRectTimer = null;
 let lastVisibleZoomSelectionPoint = null;
+let savedPointLine = null;
+let savedPointLineTimer = null;
 let zoomPixelInfo = null;
 let zoomPixelInfoTimer = null;
 let zoomMouse = null;
@@ -378,6 +380,41 @@ function drawZoomCanvasAt(x, y) {
     zoomCtx.lineWidth = 1;
     zoomCtx.setLineDash([4, 4]);
     zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
+    zoomCtx.restore();
+  }
+
+  if (savedPointLine) {
+    const lineStart = savedPointLine.start;
+    const lineEnd = savedPointLine.end;
+    const toCanvasPoint = (px, py) => {
+      const localX = Math.max(0, Math.min(sampleWidth - 1, px - startX));
+      const localY = Math.max(0, Math.min(sampleHeight - 1, py - startY));
+      return {
+        x: displayRect.offsetX + (localX / Math.max(1, sampleWidth)) * displayRect.drawWidth,
+        y: displayRect.offsetY + (localY / Math.max(1, sampleHeight)) * displayRect.drawHeight
+      };
+    };
+
+    const startPoint = toCanvasPoint(lineStart.x, lineStart.y);
+    const endPoint = toCanvasPoint(lineEnd.x, lineEnd.y);
+
+    zoomCtx.save();
+    zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    zoomCtx.lineWidth = 1.5;
+    zoomCtx.beginPath();
+    zoomCtx.moveTo(startPoint.x + 0.5, startPoint.y + 0.5);
+    zoomCtx.lineTo(endPoint.x + 0.5, endPoint.y + 0.5);
+    zoomCtx.stroke();
+
+    const drawMarkerRect = (px, py) => {
+      const pt = toCanvasPoint(px, py);
+      const rectSize = Math.max(4, Math.round((zoomCanvas.width / Math.max(1, sampleWidth)) * 1.5));
+      zoomCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      zoomCtx.strokeRect(pt.x - rectSize / 2, pt.y - rectSize / 2, rectSize, rectSize);
+    };
+
+    drawMarkerRect(lineStart.x, lineStart.y);
+    drawMarkerRect(lineEnd.x, lineEnd.y);
     zoomCtx.restore();
   }
 
@@ -1505,6 +1542,34 @@ function restorePointFromSlot(slotIndex) {
   setStatus(`슬롯 ${index}: (${x}, ${y}) 복원됨`);
 }
 
+function showSavedPointConnection(slotA = 1, slotB = 2) {
+  const pointA = savedPointSlots[Math.max(0, Math.min(9, slotA - 1))];
+  const pointB = savedPointSlots[Math.max(0, Math.min(9, slotB - 1))];
+
+  if (!pointA || !pointB) {
+    setStatus('슬롯 1과 2에 모두 저장된 점이 필요합니다.', true);
+    return;
+  }
+
+  savedPointLine = {
+    start: { x: pointA.x, y: pointA.y },
+    end: { x: pointB.x, y: pointB.y }
+  };
+
+  if (savedPointLineTimer) {
+    clearTimeout(savedPointLineTimer);
+  }
+
+  drawZoomCanvasAt(pointA.x, pointA.y);
+  savedPointLineTimer = setTimeout(() => {
+    savedPointLine = null;
+    savedPointLineTimer = null;
+    redrawZoomCanvas();
+  }, 15000);
+
+  setStatus(`슬롯 ${slotA} → ${slotB} 연결: (${pointA.x}, ${pointA.y}) → (${pointB.x}, ${pointB.y})`);
+}
+
 function saveCurrentImageToStorage() {
   if (!sourceCanvas || !window.localStorage) return;
 
@@ -1607,10 +1672,15 @@ function loadImageIntoCanvases(bitmap) {
     clearTimeout(zoomSelectionRectTimer);
     zoomSelectionRectTimer = null;
   }
+  if (savedPointLineTimer) {
+    clearTimeout(savedPointLineTimer);
+    savedPointLineTimer = null;
+  }
   if (zoomPixelInfoTimer) {
     clearTimeout(zoomPixelInfoTimer);
     zoomPixelInfoTimer = null;
   }
+  savedPointLine = null;
   originalGuideLineY = null;
   originalGuideLineX = null;
   zoomGuideLineX = null;
@@ -1805,6 +1875,12 @@ window.addEventListener('keydown', (event) => {
 
   if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) {
     if (event.key === 'Escape') return;
+  }
+
+  if (event.shiftKey && key === 'l') {
+    event.preventDefault();
+    showSavedPointConnection(1, 2);
+    return;
   }
 
   if (event.code && /^Digit[0-9]$/.test(event.code)) {
