@@ -1594,7 +1594,10 @@ function showSavedPointConnection(slotA = 1, slotB = 2) {
   }
 
   const fixedY = Math.round((pointA.y + pointB.y) / 2);
-  currentSnapshot = buildGrayscaleSnapshot(fixedY, 0, values.length - 1, values);
+  currentSnapshot = {
+    ...buildGrayscaleSnapshot(fixedY, 0, values.length - 1, values),
+    lineSampleCount: values.length
+  };
   drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
   updatePeakPanelsFromCurrentGraphState();
 
@@ -2402,6 +2405,13 @@ function drawSingleGrayscaleGraph(canvas, snapshot) {
   }
   drawAxes(ctx, canvas);
   drawThresholdReferenceLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#7ef3ff', 'th');
+  if (snapshot.lineSampleCount) {
+    ctx.save();
+    ctx.fillStyle = '#dff7ff';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`pixels=${snapshot.lineSampleCount}`, canvas.width - 110, 22);
+    ctx.restore();
+  }
   plotLine(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax, '#4da6ff');
   drawMarkerPointsForGraph(ctx, canvas, snapshot.values, snapshot.yMin, snapshot.yMax);
 }
