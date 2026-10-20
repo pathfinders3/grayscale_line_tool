@@ -2033,6 +2033,23 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+    if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+
+    event.preventDefault();
+    if (!hasImage || !sourceCanvas) return;
+
+    const currentPoint = zoomSelectionRect
+      ? { x: zoomSelectionRect.x, y: zoomSelectionRect.y }
+      : (zoomFocusPoint || { x: Math.floor(sourceCanvas.width / 2), y: Math.floor(sourceCanvas.height / 2) });
+
+    const nextX = Math.max(0, Math.min(sourceCanvas.width - 1, currentPoint.x + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0)));
+    const nextY = Math.max(0, Math.min(sourceCanvas.height - 1, currentPoint.y + (event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0)));
+    const size = zoomSelectionRect ? zoomSelectionRect.size : 1;
+    showTemporaryZoomSelectionRect(nextX, nextY, size, 12000);
+    return;
+  }
+
   if (['w', 'a', 's', 'd'].includes(key) === false) return;
   if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
 
