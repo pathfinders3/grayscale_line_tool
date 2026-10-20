@@ -1542,6 +1542,42 @@ function restorePointFromSlot(slotIndex) {
   setStatus(`슬롯 ${index}: (${x}, ${y}) 복원됨`);
 }
 
+function sampleLineGrayscale(startX, startY, endX, endY) {
+  if (!sourceCanvas || !sourceCtx) return [];
+
+  const values = [];
+  let x0 = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX)));
+  let y0 = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY)));
+  let x1 = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(endX)));
+  let y1 = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(endY)));
+
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+
+  while (true) {
+    const pixel = sourceCtx.getImageData(x0, y0, 1, 1).data;
+    const gray = Math.round(0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2]);
+    values.push(gray);
+
+    if (x0 === x1 && y0 === y1) break;
+
+    const e2 = err * 2;
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+
+  return values;
+}
+
 function showSavedPointConnection(slotA = 1, slotB = 2) {
   const pointA = savedPointSlots[Math.max(0, Math.min(9, slotA - 1))];
   const pointB = savedPointSlots[Math.max(0, Math.min(9, slotB - 1))];
@@ -1550,6 +1586,17 @@ function showSavedPointConnection(slotA = 1, slotB = 2) {
     setStatus('슬롯 1과 2에 모두 저장된 점이 필요합니다.', true);
     return;
   }
+
+  const values = sampleLineGrayscale(pointA.x, pointA.y, pointB.x, pointB.y);
+  if (!values.length) {
+    setStatus('직선 경로에서 값을 추출할 수 없습니다.', true);
+    return;
+  }
+
+  const fixedY = Math.round((pointA.y + pointB.y) / 2);
+  currentSnapshot = buildGrayscaleSnapshot(fixedY, 0, values.length - 1, values);
+  drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
+  updatePeakPanelsFromCurrentGraphState();
 
   savedPointLine = {
     start: { x: pointA.x, y: pointA.y },
@@ -1567,7 +1614,7 @@ function showSavedPointConnection(slotA = 1, slotB = 2) {
     redrawZoomCanvas();
   }, 15000);
 
-  setStatus(`슬롯 ${slotA} → ${slotB} 연결: (${pointA.x}, ${pointA.y}) → (${pointB.x}, ${pointB.y})`);
+  setStatus(`슬롯 ${slotA} → ${slotB} 연결: (${pointA.x}, ${pointA.y}) → (${pointB.x}, ${pointB.y}) / 샘플 ${values.length}개`);
 }
 
 function saveCurrentImageToStorage() {
