@@ -2906,6 +2906,11 @@ graphCanvas.addEventListener('click', (event) => {
   renderCurrentGraphWithHoverGuide();
   setGraphHoverInfo(`graph cursor: x=${mappedPoint.x}, y=${mappedPoint.y ?? '-'}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
 
+  if (Number.isFinite(mappedPoint.x) && Number.isFinite(mappedPoint.y)) {
+    drawZoomCanvasAt(mappedPoint.x, mappedPoint.y);
+    showTemporaryZoomSelectionRect(mappedPoint.x, mappedPoint.y, 7, 12000);
+  }
+
   showOriginalGuidesForCurrentGraph(mappedPoint.x, 15000);
   graphCanvas.focus();
 });
