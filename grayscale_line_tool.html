@@ -47,7 +47,6 @@
 </style>
 </head>
 <body>
-<h1>Grayscale Line Graph Tool</h1>
 <p class="hint">캔버스에 이미지를 붙여넣기(Ctrl+V) 한 뒤, 왼쪽 캔버스에서 마우스로 드래그하여 X 범위(및 Y 중앙값)를 선택하세요. 선택하지 않으면 전체 가로폭을 사용합니다.</p>
 
 <div class="canvases">
@@ -133,6 +132,14 @@
 </div>
 
 <div id="cumulateOptions" class="cumulate-options" aria-label="cumulate line selector"></div>
+
+<div id="brightnessCheckInfo" class="brightness-check-info">밝기 체크: 선택 영역을 지정한 뒤 버튼을 눌러주세요.</div>
+<div id="originalHoverInfo" class="original-hover-info">original cursor: x=-, y=-</div>
+<div id="graphHoverInfo" class="graph-hover-info">graph cursor: x=-, y=-, color=-</div>
+<div id="zoomPixelInfo" class="zoom-pixel-info">zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)</div>
+
+<div id="status">이미지를 붙여넣어 주세요 (Ctrl+V)</div>
+
 <div class="shortcut-help">
   <details>
     <summary>단축키 도움말</summary>
@@ -145,12 +152,6 @@
     </ul>
   </details>
 </div>
-<div id="brightnessCheckInfo" class="brightness-check-info">밝기 체크: 선택 영역을 지정한 뒤 버튼을 눌러주세요.</div>
-<div id="originalHoverInfo" class="original-hover-info">original cursor: x=-, y=-</div>
-<div id="graphHoverInfo" class="graph-hover-info">graph cursor: x=-, y=-, color=-</div>
-<div id="zoomPixelInfo" class="zoom-pixel-info">zoom pixel: x=-, y=-, RGB(-, -, -), Gray(-)</div>
-
-<div id="status">이미지를 붙여넣어 주세요 (Ctrl+V)</div>
 
 <script src="./grayscale_line_tool.js"></script>
 </body>

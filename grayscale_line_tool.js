@@ -376,9 +376,16 @@ function drawZoomCanvasAt(x, y) {
     const rectHeight = Math.max(1, displayRect.drawHeight / Math.max(1, sampleHeight));
 
     zoomCtx.save();
-    zoomCtx.strokeStyle = 'rgba(255, 66, 66, 0.9)';
     zoomCtx.lineWidth = 1;
-    zoomCtx.setLineDash([4, 4]);
+
+    zoomCtx.setLineDash([7, 5]);
+    zoomCtx.lineDashOffset = 0;
+    zoomCtx.strokeStyle = 'rgba(116, 15, 15, 0.95)';
+    zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
+
+    zoomCtx.setLineDash([7, 5]);
+    zoomCtx.lineDashOffset = 7;
+    zoomCtx.strokeStyle = 'rgba(15, 134, 41, 0.95)';
     zoomCtx.strokeRect(rectLeft + 0.5, rectTop + 0.5, rectWidth, rectHeight);
     zoomCtx.restore();
   }
