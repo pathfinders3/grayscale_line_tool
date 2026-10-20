@@ -734,6 +734,25 @@ function getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, xMin, xMax) 
   return mappedX;
 }
 
+function getOriginalPointFromGraphSampleIndex(sampleIndex, sampleCount, xMin, xMax) {
+  const mappedX = getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, xMin, xMax);
+  let mappedY = null;
+
+  if (currentSnapshot && Array.isArray(currentSnapshot.linePathPoints) && currentSnapshot.linePathPoints.length === sampleCount) {
+    const pathPoint = currentSnapshot.linePathPoints[sampleIndex];
+    if (pathPoint && Number.isFinite(pathPoint.y)) {
+      mappedY = Math.max(0, Math.min(sourceCanvas ? sourceCanvas.height - 1 : pathPoint.y, Math.round(pathPoint.y)));
+    }
+  } else {
+    const guideY = getCurrentGraphGuideY();
+    if (Number.isFinite(guideY)) {
+      mappedY = Math.max(0, Math.min(sourceCanvas ? sourceCanvas.height - 1 : guideY, Math.round(guideY)));
+    }
+  }
+
+  return { x: mappedX, y: mappedY };
+}
+
 function getGraphGuideValueSummary(sampleIndex, lines = getActiveLinesFromGraphState()) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || !Array.isArray(lines)) return null;
 
@@ -1279,9 +1298,9 @@ function paintGraphGuideAtSampleIndex(sampleIndex) {
   hoverGuideState.canvasX = sampleX;
   hoverGuideState.valueSummary = getGraphGuideValueSummary(clampedIndex, lines);
 
-  const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
-    ? getOriginalXFromGraphSampleIndex(clampedIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
-    : null;
+  const mappedPoint = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+    ? getOriginalPointFromGraphSampleIndex(clampedIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+    : { x: null, y: null };
 
   const parts = [];
   for (const line of lines) {
@@ -1293,9 +1312,9 @@ function paintGraphGuideAtSampleIndex(sampleIndex) {
   const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
   const peakText = getPeakStatusForSampleIndex(clampedIndex, lines);
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${mappedX ?? clampedIndex}, y=-, sampleIndex=${clampedIndex}, color=${colorText}, ${peakText}`);
+  setGraphHoverInfo(`graph cursor: x=${mappedPoint.x ?? clampedIndex}, y=${mappedPoint.y ?? '-'}, sampleIndex=${clampedIndex}, color=${colorText}, ${peakText}`);
 
-  showOriginalGuidesForCurrentGraph(mappedX, 15000);
+  showOriginalGuidesForCurrentGraph(mappedPoint.x, 15000);
 }
 
 function updateGraphHoverInfo(evt) {
@@ -1306,9 +1325,9 @@ function updateGraphHoverInfo(evt) {
       const sampleCount = Array.isArray(lines[0].values) ? lines[0].values.length : 0;
       if (sampleCount > 0) {
         hoverGuideState.valueSummary = getGraphGuideValueSummary(hoverGuideState.sampleIndex, lines);
-        const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
-          ? getOriginalXFromGraphSampleIndex(hoverGuideState.sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
-          : null;
+        const mappedPoint = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+          ? getOriginalPointFromGraphSampleIndex(hoverGuideState.sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+          : { x: null, y: null };
         const valueParts = [];
         for (const line of lines) {
           if (!Array.isArray(line.values) || hoverGuideState.sampleIndex >= line.values.length) continue;
@@ -1316,7 +1335,7 @@ function updateGraphHoverInfo(evt) {
         }
         const colorText = valueParts.length > 0 ? valueParts.join(', ') : '데이터 없음';
         const peakText = getPeakStatusForSampleIndex(hoverGuideState.sampleIndex, lines);
-        setGraphHoverInfo(`graph cursor: x=${mappedX ?? hoverGuideState.sampleIndex}, y=-, sampleIndex=${hoverGuideState.sampleIndex}, color=${colorText}, ${peakText} (locked)`);
+        setGraphHoverInfo(`graph cursor: x=${mappedPoint.x ?? hoverGuideState.sampleIndex}, y=${mappedPoint.y ?? '-'}, sampleIndex=${hoverGuideState.sampleIndex}, color=${colorText}, ${peakText} (locked)`);
       }
     }
     return;
@@ -1355,9 +1374,9 @@ function updateGraphHoverInfo(evt) {
   hoverGuideState.canvasX = sampleX;
   hoverGuideState.valueSummary = getGraphGuideValueSummary(sampleIndex, lines);
 
-  const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
-    ? getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
-    : null;
+  const mappedPoint = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+    ? getOriginalPointFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+    : { x: null, y: null };
 
   const parts = [];
   for (const line of lines) {
@@ -1369,7 +1388,7 @@ function updateGraphHoverInfo(evt) {
   const colorText = parts.length > 0 ? parts.join(', ') : '데이터 없음';
   const peakText = getPeakStatusForSampleIndex(sampleIndex, lines);
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${mappedX ?? coords.x}, y=${coords.y}, sampleIndex=${sampleIndex}, color=${colorText}, ${peakText}`);
+  setGraphHoverInfo(`graph cursor: x=${mappedPoint.x ?? sampleIndex}, y=${mappedPoint.y ?? '-'}, sampleIndex=${sampleIndex}, color=${colorText}, ${peakText}`);
 }
 
 function stepGraphGuideBy(delta) {
@@ -2863,9 +2882,12 @@ graphCanvas.addEventListener('click', (event) => {
   if (sampleCount <= 0) return;
 
   const sampleIndex = getSampleIndexFromCanvasX(clickX, sampleCount);
-  const mappedX = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
-    ? getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
-    : Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1))));
+  const mappedPoint = currentSnapshot && Number.isFinite(currentSnapshot.graphXMin) && Number.isFinite(currentSnapshot.graphXMax)
+    ? getOriginalPointFromGraphSampleIndex(sampleIndex, sampleCount, currentSnapshot.graphXMin, currentSnapshot.graphXMax)
+    : {
+      x: Math.max(0, Math.min(sourceCanvas.width - 1, Math.round((sampleIndex / Math.max(1, sampleCount - 1)) * (sourceCanvas.width - 1)))),
+      y: Number.isFinite(getCurrentGraphGuideY()) ? Math.round(getCurrentGraphGuideY()) : null
+    };
 
   const valueParts = [];
   for (const line of activeLines) {
@@ -2882,9 +2904,9 @@ graphCanvas.addEventListener('click', (event) => {
   hoverGuideState.valueSummary = getGraphGuideValueSummary(sampleIndex, activeLines);
   renderPeakMarkerButtons();
   renderCurrentGraphWithHoverGuide();
-  setGraphHoverInfo(`graph cursor: x=${mappedX}, y=${Math.round((event.clientY - rect.top) * (graphCanvas.height / rect.height))}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
+  setGraphHoverInfo(`graph cursor: x=${mappedPoint.x}, y=${mappedPoint.y ?? '-'}, sampleIndex=${sampleIndex}, color=${valueText}, ${peakText} (locked)`);
 
-  showOriginalGuidesForCurrentGraph(mappedX, 15000);
+  showOriginalGuidesForCurrentGraph(mappedPoint.x, 15000);
   graphCanvas.focus();
 });
 
