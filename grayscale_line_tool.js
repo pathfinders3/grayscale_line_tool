@@ -717,6 +717,15 @@ function getSampleIndexFromCanvasX(canvasX, sampleCount) {
 
 function getOriginalXFromGraphSampleIndex(sampleIndex, sampleCount, xMin, xMax) {
   if (!Number.isInteger(sampleIndex) || sampleIndex < 0 || sampleCount <= 0) return null;
+
+  // For SHIFT+L line snapshots, map by the exact sampled path point.
+  if (currentSnapshot && Array.isArray(currentSnapshot.linePathPoints) && currentSnapshot.linePathPoints.length === sampleCount) {
+    const pathPoint = currentSnapshot.linePathPoints[sampleIndex];
+    if (pathPoint && Number.isFinite(pathPoint.x)) {
+      return Math.max(0, Math.min(sourceCanvas ? sourceCanvas.width - 1 : pathPoint.x, Math.round(pathPoint.x)));
+    }
+  }
+
   const start = Number.isFinite(xMin) ? xMin : 0;
   const end = Number.isFinite(xMax) ? xMax : start;
   const span = Math.max(0, end - start);
@@ -1543,9 +1552,10 @@ function restorePointFromSlot(slotIndex) {
 }
 
 function sampleLineGrayscale(startX, startY, endX, endY) {
-  if (!sourceCanvas || !sourceCtx) return [];
+  if (!sourceCanvas || !sourceCtx) return { values: [], points: [] };
 
   const values = [];
+  const points = [];
   let x0 = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(startX)));
   let y0 = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(startY)));
   let x1 = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(endX)));
@@ -1561,6 +1571,7 @@ function sampleLineGrayscale(startX, startY, endX, endY) {
     const pixel = sourceCtx.getImageData(x0, y0, 1, 1).data;
     const gray = Math.round(0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2]);
     values.push(gray);
+    points.push({ x: x0, y: y0 });
 
     if (x0 === x1 && y0 === y1) break;
 
@@ -1575,7 +1586,7 @@ function sampleLineGrayscale(startX, startY, endX, endY) {
     }
   }
 
-  return values;
+  return { values, points };
 }
 
 function showSavedPointConnection(slotA = 1, slotB = 2) {
@@ -1587,7 +1598,8 @@ function showSavedPointConnection(slotA = 1, slotB = 2) {
     return;
   }
 
-  const values = sampleLineGrayscale(pointA.x, pointA.y, pointB.x, pointB.y);
+  const sampledLine = sampleLineGrayscale(pointA.x, pointA.y, pointB.x, pointB.y);
+  const values = sampledLine.values;
   if (!values.length) {
     setStatus('직선 경로에서 값을 추출할 수 없습니다.', true);
     return;
@@ -1596,7 +1608,8 @@ function showSavedPointConnection(slotA = 1, slotB = 2) {
   const fixedY = Math.round((pointA.y + pointB.y) / 2);
   currentSnapshot = {
     ...buildGrayscaleSnapshot(fixedY, 0, values.length - 1, values),
-    lineSampleCount: values.length
+    lineSampleCount: values.length,
+    linePathPoints: sampledLine.points
   };
   drawSingleGrayscaleGraph(graphCanvas, currentSnapshot);
   updatePeakPanelsFromCurrentGraphState();
